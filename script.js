@@ -231,7 +231,7 @@ function generateWholesalerNPCs(products, count) {
     const wholesalers = [];
     const wholesalerNames = ["City Mart", "General Traders", "Bulk Buyers LLC", "Super Value Grocers", "Furniture Emporium"];
     for (let i = 0; i < count; i++) {
-        const name = wholesalerNames[i % wholesalerNames.length] + (Math.floor(i / supplierNames.length) > 0 ? ` ${Math.floor(i / supplierNames.length) +1}` : '');
+        const name = wholesalerNames[i % wholesalerNames.length] + (Math.floor(i / wholesalerNames.length) > 0 ? ` ${Math.floor(i / wholesalerNames.length) +1}` : '');
         const wholesaler = new Wholesaler(name);
         const numProductsToDemand = Math.floor(Math.random() * Math.min(products.length, 3)) + 1; 
         let availableProducts = [...products];
@@ -1072,11 +1072,17 @@ function initializeGame() {
 
 function advanceTurn() {
     logFunctionStart('advanceTurn');
-    
-    if(player) { 
-        player.lastTurnIncome = 0;
-        player.lastTurnExpenses = 0;
+
+    if (!player) {
+        showNotification("Player data is not initialized. Please reload the game.", "error");
+        console.error("CRITICAL: Player object is not initialized in advanceTurn. Game cannot proceed.");
+        logFunctionEnd('advanceTurn');
+        return; // Stop execution if player is not initialized
     }
+    
+    // Reset last turn's finances at the beginning of the new turn
+    player.lastTurnIncome = 0;
+    player.lastTurnExpenses = 0;
 
     currentTurn++;
     showNotification(`Advanced to Turn: ${currentTurn}`, 'info'); 
