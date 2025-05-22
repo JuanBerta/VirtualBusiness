@@ -19,6 +19,39 @@ header h1 {
     margin: 0;
 }
 
+/* Main Navigation Bar */
+#main-nav {
+    background-color: #444;
+    padding: 10px 0;
+    width: 100%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Optional: adds a subtle shadow */
+}
+
+#main-nav ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+}
+
+#main-nav ul li {
+    display: inline-block; /* Or inline, depending on desired spacing control */
+    margin: 0 5px; /* Optional: adds some space between items */
+}
+
+#main-nav ul li a {
+    color: white;
+    padding: 10px 15px;
+    text-decoration: none;
+    display: block; /* Makes the entire area clickable */
+    border-radius: 4px; /* Optional: rounded corners for links */
+}
+
+#main-nav ul li a:hover {
+    background-color: #555;
+    color: #f0f0f0; /* Optional: slightly lighter text on hover */
+}
+
 main {
     padding: 1rem;
     display: grid;
@@ -34,6 +67,11 @@ main {
         "npc-buy-offers-section player-delivery-contracts-npc-section"
         "npc-companies-info-section npc-companies-info-section"; /* Added NPC Companies Info */
     grid-gap: 1rem;
+}
+
+.game-view {
+    display: none; /* Hidden by default, JS will manage visibility */
+    /* If a view itself is a grid container, set display: grid here or in showView when made visible */
 }
 
 /* Section Styling */

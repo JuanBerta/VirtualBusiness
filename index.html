@@ -11,106 +11,136 @@
         <h1>Business Simulation Game</h1>
     </header>
 
+    <nav id="main-nav">
+        <ul>
+            <li><a href="#" id="nav-dashboard">Dashboard</a></li>
+            <li><a href="#" id="nav-production">Production</a></li>
+            <li><a href="#" id="nav-retail">Retail</a></li>
+            <li><a href="#" id="nav-marketplace">Marketplace</a></li>
+            <li><a href="#" id="nav-contracts">Contracts</a></li>
+            <li><a href="#" id="nav-npcs">NPCs</a></li>
+        </ul>
+    </nav>
+
     <main>
-        <section id="game-instructions">
-            <h3>Welcome to Business Sim!</h3>
-            <p><strong>Goal:</strong> Your objective is to make a profit by strategically buying products from suppliers, selling them to wholesalers, or fulfilling contracts.</p>
-            <p><strong>How to Play:</strong>
-                <ul>
-                    <li>Review available products from <strong>Suppliers</strong> and buy what you think you can sell or use for contracts.</li>
-                    <li>Check what <strong>Wholesalers</strong> are demanding and sell your products to them.</li>
-                    <li>Look at <strong>Market Contracts</strong>. If you can fulfill one by its deadline, accept it for a potentially higher profit.</li>
-                    <li>Manage your inventory and money carefully.</li>
-                    <li>Click "Advance Turn" to move to the next day, which will update markets, prices, and contract deadlines.</li>
-                </ul>
-            </p>
-            <p><small><strong>Note:</strong> If you encounter issues or the game doesn't display correctly, check the browser's Developer Console (usually F12) for detailed logs and error messages.</small></p>
-        </section>
+        <!-- Dashboard View -->
+        <div id="view-dashboard" class="game-view"> <!-- Default visible, managed by JS -->
+            <section id="game-instructions">
+                <h3>Welcome to Business Sim!</h3>
+                <p><strong>Goal:</strong> Your objective is to make a profit by strategically buying products from suppliers, selling them to wholesalers, or fulfilling contracts.</p>
+                <p><strong>How to Play:</strong>
+                    <ul>
+                        <li>Use the "Advance Turn" button to move the game forward.</li>
+                        <li>Buy raw materials from Suppliers.</li>
+                        <li>Sell products to Wholesalers or fulfill contracts.</li>
+                        <li>Look at <strong>Market Contracts</strong>. If you can fulfill one by its deadline, accept it for a potentially higher profit.</li>
+                        <li>Manage your inventory and money carefully.</li>
+                        <li>Click "Advance Turn" to move to the next day, which will update markets, prices, and contract deadlines.</li>
+                    </ul>
+                </p>
+                <p><small><strong>Note:</strong> If you encounter issues or the game doesn't display correctly, check the browser's Developer Console (usually F12) for detailed logs and error messages.</small></p>
+            </section>
+    
+            <section id="game-interface"> <!-- Contains player-info -->
+                <h2>Game Interface</h2>
+                <div id="player-info">
+                    <!-- Player's money and inventory will be displayed here -->
+                </div>
+                <div id="notifications-area" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; min-height: 50px;">
+                    <!-- Notifications will appear here -->
+                </div>
+                <button id="advance-turn-btn" onclick="advanceTurn()">Advance Turn</button>
+            </section>
+            
+            <section id="market-opportunities"> <!-- Moved to Dashboard -->
+                <h2>Market Opportunities</h2>
+                <!-- Profitable direct trades will be listed here -->
+            </section>
+        </div>
 
-        <section id="game-interface">
-            <h2>Game Interface</h2>
-            <div id="player-info">
-                <!-- Player's money and inventory will be displayed here -->
-            </div>
-            <div id="notifications-area" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; min-height: 50px;">
-                <!-- Notifications will appear here -->
-            </div>
-            <button id="advance-turn-btn" onclick="advanceTurn()">Advance Turn</button>
-            <!-- Placeholder for game controls and displays -->
-        </section>
+        <!-- Production View -->
+        <div id="view-production" class="game-view" style="display: none;">
+            <section id="buy-production-units-section">
+                <!-- Available production units will be listed here by displayAvailableProductionUnits() -->
+            </section>
+    
+            <section id="player-owned-units-section">
+                <!-- Player's owned production units will be listed here by displayPlayerOwnedUnits() -->
+            </section>
+        </div>
 
-        <section id="suppliers-info">
-            <h2>Suppliers</h2>
-            <!-- Placeholder for supplier information -->
-        </section>
+        <!-- Retail View -->
+        <div id="view-retail" class="game-view" style="display: none;">
+            <section id="retail-management-section">
+                <!-- Retail store management UI will go here -->
+            </section>
+        </div>
 
-        <section id="wholesalers-info">
-            <h2>Wholesalers</h2>
-            <!-- Placeholder for wholesaler information -->
-        </section>
+        <!-- Marketplace View -->
+        <div id="view-marketplace" class="game-view" style="display: none;">
+            <section id="suppliers-info">
+                <h2>Suppliers</h2>
+                <!-- Placeholder for supplier information -->
+            </section>
+    
+            <section id="wholesalers-info">
+                <h2>Wholesalers</h2>
+                <!-- Placeholder for wholesaler information -->
+            </section>
 
-        <section id="contracts-info">
-            <h2>Contracts</h2>
-            <!-- Placeholder for contract information -->
-        </section>
+            <section id="contracts-info"> <!-- One-off market contracts from Suppliers/Wholesalers -->
+                <h2>Market Contracts (Pending)</h2>
+                <!-- Placeholder for contract information -->
+            </section>
+        </div>
 
-        <section id="market-opportunities">
-            <h2>Market Opportunities</h2>
-            <!-- Profitable direct trades will be listed here -->
-        </section>
+        <!-- Contracts View -->
+        <div id="view-contracts" class="game-view" style="display: none;">
+            <section id="player-active-contracts-section"> <!-- Player's accepted one-off market contracts -->
+                <h2>My Active Market Contracts</h2>
+                <div id="active-contracts-sort-controls">
+                    <label for="sort-key-contracts">Sort by:</label>
+                    <select id="sort-key-contracts">
+                        <option value="deadlineTurns">Deadline</option>
+                        <option value="totalValue">Total Value</option>
+                        <option value="productName">Product Name</option>
+                    </select>
+                    <label for="sort-order-contracts">Order:</label>
+                    <select id="sort-order-contracts">
+                        <option value="asc">Ascending</option>
+                        <option value="desc">Descending</option>
+                    </select>
+                    <button id="apply-sort-contracts-btn">Apply Sort</button>
+                </div>
+                <div id="active-contracts-list">
+                    <!-- Detailed active contracts will be listed here -->
+                </div>
+            </section>
 
-        <section id="player-active-contracts-section">
-            <h2>My Active Contracts</h2>
-            <div id="active-contracts-sort-controls">
-                <label for="sort-key-contracts">Sort by:</label>
-                <select id="sort-key-contracts">
-                    <option value="deadlineTurns">Deadline</option>
-                    <option value="totalValue">Total Value</option>
-                    <option value="productName">Product Name</option>
-                </select>
-                <label for="sort-order-contracts">Order:</label>
-                <select id="sort-order-contracts">
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                </select>
-                <button id="apply-sort-contracts-btn">Apply Sort</button>
-            </div>
-            <div id="active-contracts-list">
-                <!-- Detailed active contracts will be listed here -->
-            </div>
-        </section>
+            <section id="recurring-contracts-offers-section">
+                <!-- Recurring contract offers will be listed here -->
+            </section>
+    
+            <section id="player-active-recurring-contracts-section">
+                <!-- Player's active recurring contracts will be listed here -->
+            </section>
+    
+            <section id="npc-buy-offers-section">
+                <!-- NPC Buy Offers (for player to sell to them) will be listed here -->
+            </section>
+    
+            <section id="player-delivery-contracts-npc-section">
+                <!-- Player's active delivery commitments to NPCs will be listed here -->
+            </section>
+        </div>
+        
+        <!-- NPCs View -->
+        <div id="view-npcs" class="game-view" style="display: none;">
+             <section id="npc-companies-info-section"> <!-- Moved here -->
+                <!-- NPC Company information will be displayed here -->
+            </section>
+        </div>
 
-        <section id="buy-production-units-section">
-            <!-- Available production units will be listed here by displayAvailableProductionUnits() -->
-        </section>
-
-        <section id="player-owned-units-section">
-            <!-- Player's owned production units will be listed here by displayPlayerOwnedUnits() -->
-        </section>
-
-        <section id="retail-management-section">
-            <!-- Retail store management UI will go here -->
-        </section>
-
-        <section id="recurring-contracts-offers-section">
-            <!-- Recurring contract offers will be listed here -->
-        </section>
-
-        <section id="player-active-recurring-contracts-section">
-            <!-- Player's active recurring contracts will be listed here -->
-        </section>
-
-        <section id="npc-buy-offers-section">
-            <!-- NPC Buy Offers (for player to sell to them) will be listed here -->
-        </section>
-
-        <section id="player-delivery-contracts-npc-section">
-            <!-- Player's active delivery commitments to NPCs will be listed here -->
-        </section>
-
-        <section id="npc-companies-info-section">
-            <!-- NPC Company information will be displayed here -->
-        </section>
     </main>
 
     <footer>

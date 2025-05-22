@@ -1052,9 +1052,37 @@ function refreshAllDisplays() {
     displayRetailManagement(); 
     displayRecurringContractOffers(); 
     displayPlayerActiveRecurringContracts(); 
-    displayNpcBuyOffers(); // Added
+    displayNpcBuyOffers(); 
+    displayPlayerDeliveryContractsToNPCs(); // Added call
+    displayNpcCompaniesInfo(); // Added call
     logFunctionEnd('refreshAllDisplays');
 }
+
+// --- View Switching Logic ---
+function showView(viewIdToShow) {
+    logFunctionStart(`showView - showing ${viewIdToShow}`);
+    // Hide all views
+    const views = document.querySelectorAll('.game-view');
+    views.forEach(view => {
+        view.style.display = 'none';
+    });
+
+    // Show the selected view
+    const selectedView = document.getElementById(viewIdToShow);
+    if (selectedView) {
+        // For views that are direct grid containers or need specific display types
+        if (viewIdToShow === 'view-dashboard' || viewIdToShow === 'view-marketplace' || viewIdToShow === 'view-contracts' || viewIdToShow === 'view-production') {
+            selectedView.style.display = 'grid'; // Assuming these views might use grid for their sections
+        } else {
+            selectedView.style.display = 'block'; // Default for simpler views or sections
+        }
+        console.log(`Showing view: ${viewIdToShow} with display: ${selectedView.style.display}`);
+    } else {
+        console.error(`View with ID ${viewIdToShow} not found.`);
+    }
+    logFunctionEnd(`showView - showing ${viewIdToShow}`);
+}
+
 
 // --- Player Action Functions ---
 
@@ -1464,6 +1492,14 @@ function setupEventListeners() {
         console.error("Could not find apply sort button for contracts.");
     }
     logFunctionEnd('setupEventListeners');
+    
+    // Navigation event listeners
+    document.getElementById('nav-dashboard').addEventListener('click', (e) => { e.preventDefault(); showView('view-dashboard'); });
+    document.getElementById('nav-production').addEventListener('click', (e) => { e.preventDefault(); showView('view-production'); });
+    document.getElementById('nav-retail').addEventListener('click', (e) => { e.preventDefault(); showView('view-retail'); });
+    document.getElementById('nav-marketplace').addEventListener('click', (e) => { e.preventDefault(); showView('view-marketplace'); });
+    document.getElementById('nav-contracts').addEventListener('click', (e) => { e.preventDefault(); showView('view-contracts'); });
+    document.getElementById('nav-npcs').addEventListener('click', (e) => { e.preventDefault(); showView('view-npcs'); });
 }
 
 function initializeGame() {
@@ -1521,6 +1557,7 @@ function initializeGame() {
 
     setupEventListeners(); 
     refreshAllDisplays(); 
+    showView('view-dashboard'); // Set the default view
     logFunctionEnd('initializeGame');
 }
 
