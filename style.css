@@ -29,7 +29,8 @@ main {
         "contracts-info player-active-contracts-section" 
         "market-opportunities market-opportunities"
         "buy-production-units-section player-owned-units-section"
-        "retail-management-section retail-management-section"; /* Added new section */
+        "retail-management-section retail-management-section"
+        "recurring-contracts-offers-section player-active-recurring-contracts-section";
     grid-gap: 1rem;
 }
 
@@ -389,6 +390,66 @@ footer {
     font-size: 0.9em;
 }
 
+/* Recurring Contracts Styling */
+#recurring-contracts-offers-section,
+#player-active-recurring-contracts-section {
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-top: 1rem;
+}
+
+#recurring-contracts-offers-section {
+    grid-area: recurring-contracts-offers-section;
+    background-color: #f0fff0; /* Honeydew */
+}
+
+#player-active-recurring-contracts-section {
+    grid-area: player-active-recurring-contracts-section;
+    background-color: #fff0f5; /* LavenderBlush */
+}
+
+#recurring-contracts-offers-section h2,
+#player-active-recurring-contracts-section h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+#recurring-contracts-offers-section ul,
+#player-active-recurring-contracts-section ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#recurring-contracts-offers-section li,
+#player-active-recurring-contracts-section li {
+    background-color: #fff;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+#recurring-contracts-offers-section button,
+#player-active-recurring-contracts-section button {
+    padding: 5px 10px;
+    margin-top: 5px;
+    margin-right: 5px;
+    background-color: #17a2b8; /* Info Blue */
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#recurring-contracts-offers-section button:disabled,
+#player-active-recurring-contracts-section button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
 
 /* Responsive adjustments (optional for now, but good practice) */
 @media (max-width: 768px) {
@@ -403,6 +464,8 @@ footer {
             "market-opportunities"
             "buy-production-units-section" 
             "player-owned-units-section"
-            "retail-management-section"; /* Added */
+            "retail-management-section"
+            "recurring-contracts-offers-section"
+            "player-active-recurring-contracts-section";
     }
 }

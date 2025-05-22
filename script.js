@@ -1,6 +1,8 @@
 // script.js
 console.log('--- Script Start ---');
 
+let currentTurn = 0; // Initialize currentTurn globally
+
 // --- Utility for Logging ---
 function logFunctionStart(functionName) {
     console.log(`--- Function Start: ${functionName} ---`);
@@ -18,10 +20,67 @@ class Product {
     }
 }
 
+class Warehouse {
+    constructor(id, name, capacity) {
+        this.id = id;
+        this.name = name;
+        this.capacity = capacity; 
+        this.inventory = []; 
+    }
+
+    getCurrentStockLoad() {
+        return this.inventory.reduce((total, item) => total + item.quantity, 0);
+    }
+
+    addProduct(productObject, quantity) {
+        logFunctionStart(`Warehouse.addProduct (${this.name})`);
+        if (this.getCurrentStockLoad() + quantity > this.capacity) {
+            showNotification(`Cannot add ${quantity} ${productObject.name} to ${this.name}. Exceeds capacity.`, 'error');
+            logFunctionEnd(`Warehouse.addProduct (${this.name})`);
+            return false;
+        }
+        const existingItem = this.inventory.find(item => item.product.name === productObject.name);
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            this.inventory.push({ product: productObject, quantity: quantity });
+        }
+        logFunctionEnd(`Warehouse.addProduct (${this.name})`);
+        return true;
+    }
+
+    removeProduct(productName, quantity) {
+        logFunctionStart(`Warehouse.removeProduct (${this.name})`);
+        const productIndex = this.inventory.findIndex(item => item.product.name === productName);
+        if (productIndex > -1) {
+            if (this.inventory[productIndex].quantity >= quantity) {
+                this.inventory[productIndex].quantity -= quantity;
+                if (this.inventory[productIndex].quantity === 0) {
+                    this.inventory.splice(productIndex, 1); 
+                }
+                logFunctionEnd(`Warehouse.removeProduct (${this.name})`);
+                return true;
+            } else {
+                logFunctionEnd(`Warehouse.removeProduct (${this.name})`);
+                return false; 
+            }
+        }
+        logFunctionEnd(`Warehouse.removeProduct (${this.name})`);
+        return false; 
+    }
+
+    getProductQuantity(productName) {
+        const productItem = this.inventory.find(item => item.product.name === productName);
+        return productItem ? productItem.quantity : 0;
+    }
+}
+
+
 class Supplier {
     constructor(name) {
         this.name = name;
         this.inventory = []; 
+        this.recurringOffers = []; 
     }
 
     addProduct(product, quantity, price) {
@@ -35,16 +94,21 @@ class Supplier {
     }
 
     updatePrices() {
-        logFunctionStart('Supplier.updatePrices for ' + this.name);
         this.inventory.forEach(item => {
-            const oldPrice = item.price;
             const basePrice = item.basePrice; 
             let currentPrice = item.price;
-            if (item.quantity > 150) currentPrice -= basePrice * 0.015; 
-            else if (item.quantity < 50) currentPrice += basePrice * 0.015; 
+            const initialStock = this.initialStockLevels ? (this.initialStockLevels.get(item.product.name) || item.quantity) : item.quantity;
+            if (item.quantity > (initialStock * 1.5) ) currentPrice -= basePrice * 0.015; 
+            else if (item.quantity < (initialStock * 0.5) ) currentPrice += basePrice * 0.015; 
             item.price = parseFloat(Math.max(basePrice * 0.7, Math.min(currentPrice, basePrice * 1.5)).toFixed(2));
         });
-        logFunctionEnd('Supplier.updatePrices for ' + this.name);
+    }
+     
+     setInitialStockLevels() {
+        this.initialStockLevels = new Map();
+        this.inventory.forEach(item => {
+            this.initialStockLevels.set(item.product.name, item.quantity);
+        });
     }
 }
 
@@ -58,34 +122,28 @@ class Wholesaler {
         this.demand.push({ 
             product, quantity, price, 
             initialDemandPrice: price, 
+            initialQuantity: quantity, 
             unitsPurchasedLastTurn: 0, turnsWithoutPurchase: 0 
         });
     }
 
     generateContract() {
-        logFunctionStart('Wholesaler.generateContract for ' + this.name);
-        if (this.demand.length === 0) {
-            logFunctionEnd('Wholesaler.generateContract for ' + this.name);
-            return null;
-        }
+        if (this.demand.length === 0) return null;
         const demandItem = this.demand[Math.floor(Math.random() * this.demand.length)];
+        if (!demandItem || !demandItem.product) return null;
         const product = demandItem.product;
-        const contractQuantity = Math.floor(Math.random() * 31) + 10; 
+        const contractQuantity = Math.floor(Math.random() * (demandItem.initialQuantity * 0.5)) + Math.floor(demandItem.initialQuantity * 0.25); 
         const contractPricePerUnit = parseFloat((demandItem.price * 1.05).toFixed(2)); 
         const deadline = currentTurn + Math.floor(Math.random() * 6) + 5; 
-        const newContract = new Contract(product.name, contractQuantity, contractPricePerUnit, deadline, this.name);
-        logFunctionEnd('Wholesaler.generateContract for ' + this.name);
-        return newContract;
+        return new Contract(product.name, contractQuantity, contractPricePerUnit, deadline, this.name);
     }
 
     updateDemandPrices() {
-        logFunctionStart('Wholesaler.updateDemandPrices for ' + this.name);
         this.demand.forEach(item => {
-            const oldPrice = item.price;
             const initialPrice = item.initialDemandPrice;
             let currentPrice = item.price;
             if (item.unitsPurchasedLastTurn > 0) {
-                currentPrice -= initialPrice * 0.02 * (item.unitsPurchasedLastTurn / 10); 
+                currentPrice -= initialPrice * 0.02 * (item.unitsPurchasedLastTurn / (item.initialQuantity * 0.1)); 
                 item.turnsWithoutPurchase = 0;
             } else {
                 item.turnsWithoutPurchase++;
@@ -94,11 +152,10 @@ class Wholesaler {
             item.unitsPurchasedLastTurn = 0;
             item.price = parseFloat(Math.max(initialPrice * 0.7, Math.min(currentPrice, initialPrice * 1.3)).toFixed(2));
         });
-        logFunctionEnd('Wholesaler.updateDemandPrices for ' + this.name);
     }
 }
 
-class Contract {
+class Contract { 
     constructor(productName, quantity, pricePerUnit, deadlineTurns, issuerNPC) {
         this.productName = productName; 
         this.quantity = quantity;
@@ -106,21 +163,40 @@ class Contract {
         this.deadlineTurns = deadlineTurns; 
         this.issuerNPC = issuerNPC; 
         this.status = 'pending'; 
-        this.id = Date.now().toString(36) + Math.random().toString(36).substr(2); 
+        this.id = 'contract-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5); 
     }
 }
 
+class RecurringSupplyContract {
+    constructor(id, supplierId, supplierName, productId, productName, quantityPerTurn, pricePerUnit, totalTurns, targetWarehouseId) {
+        this.id = id; 
+        this.supplierId = supplierId; 
+        this.supplierName = supplierName;
+        this.productId = productId; 
+        this.productName = productName;
+        this.quantityPerTurn = quantityPerTurn;
+        this.pricePerUnit = pricePerUnit;
+        this.totalTurns = totalTurns;
+        this.turnsRemaining = totalTurns;
+        this.targetWarehouseId = targetWarehouseId || 'wh0'; 
+        this.status = 'active'; 
+    }
+}
+
+
 class ProductionUnit {
-    constructor(typeId, name, cost, productionRecipe, instanceId) { 
+    constructor(typeId, name, cost, productionRecipe, instanceId, targetWarehouseId) { 
         this.typeId = typeId; 
         this.instanceId = instanceId; 
         this.name = name; 
         this.cost = cost; 
         this.productionRecipe = productionRecipe; 
-        this.status = 'idle'; 
+        this.targetWarehouseId = targetWarehouseId; // Added
+        this.status = 'idle'; // idle, sourcing_materials, producing, completed (output ready), transferring_output
         this.productionProgress = 0; 
-        this.inputInventory = { productName: productionRecipe.input.productName, quantity: 0, capacity: productionRecipe.input.quantity };
-        this.outputInventory = { productName: productionRecipe.output.productName, quantity: 0, capacity: productionRecipe.output.quantity };
+        // Input and output are now conceptual; materials are directly pulled from/pushed to warehouse
+        // this.inputInventory = { productName: productionRecipe.input.productName, quantity: 0, capacity: productionRecipe.input.quantity };
+        // this.outputInventory = { productName: productionRecipe.output.productName, quantity: 0, capacity: productionRecipe.output.quantity };
     }
 }
 
@@ -138,41 +214,55 @@ class RetailStore {
 class Player {
     constructor(initialMoney = 1000) {
         this.money = initialMoney;
-        this.inventory = []; 
+        this.warehouses = []; 
         this.acceptedContracts = []; 
         this.productionUnits = []; 
         this.retailStore = null; 
         this.lastTurnIncome = 0;
         this.lastTurnExpenses = 0;
+        this.recurringSupplyContracts = []; 
+
+        const mainWarehouse = new Warehouse('wh0', 'Main Warehouse', 5000);
+        this.warehouses.push(mainWarehouse);
     }
 
-    addProductToInventory(product, quantity) { 
-        const existingProductItem = this.inventory.find(item => item.product.name === product.name);
-        if (existingProductItem) existingProductItem.quantity += quantity;
-        else this.inventory.push({ product: product, quantity: quantity });
-    }
-
-    removeProductFromInventory(productName, quantity) {
-        const productIndex = this.inventory.findIndex(item => item.product.name === productName);
-        if (productIndex > -1) {
-            if (this.inventory[productIndex].quantity > quantity) {
-                this.inventory[productIndex].quantity -= quantity;
-                return true;
-            } else if (this.inventory[productIndex].quantity === quantity) {
-                this.inventory.splice(productIndex, 1);
-                return true;
-            }
+    getPrimaryWarehouse() {
+        if (this.warehouses.length > 0) {
+            return this.warehouses[0];
         }
-        return false; 
+        console.error("Player has no warehouses!"); 
+        return null; 
     }
 
-    hasEnoughProduct(productName, quantity) {
-        const productItem = this.inventory.find(item => item.product.name === productName);
-        return productItem && productItem.quantity >= quantity;
+    addProductToWarehouse(product, quantity, warehouseId = null) { 
+        const warehouse = warehouseId ? this.warehouses.find(wh => wh.id === warehouseId) : this.getPrimaryWarehouse();
+        if (warehouse) {
+            return warehouse.addProduct(product, quantity);
+        }
+        showNotification("Target warehouse not found for adding product.", "error");
+        return false;
+    }
+
+    removeProductFromWarehouse(productName, quantity, warehouseId = null) {
+        const warehouse = warehouseId ? this.warehouses.find(wh => wh.id === warehouseId) : this.getPrimaryWarehouse();
+        if (warehouse) {
+            return warehouse.removeProduct(productName, quantity);
+        }
+        showNotification("Target warehouse not found for removing product.", "error");
+        return false;
+    }
+
+    hasEnoughProduct(productName, quantity, warehouseId = null) {
+        const warehouse = warehouseId ? this.warehouses.find(wh => wh.id === warehouseId) : this.getPrimaryWarehouse();
+        if (warehouse) {
+            return warehouse.getProductQuantity(productName) >= quantity;
+        }
+        return false;
     }
 }
 
 // --- UI Feedback ---
+// ... (showNotification unchanged)
 let notificationTimeout;
 function showNotification(message, type = 'info') {
     const notificationsArea = document.getElementById('notifications-area');
@@ -190,21 +280,27 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-
 // --- NPC Generation Functions ---
+// ... (generateSupplierNPCs, generateWholesalerNPCs largely unchanged for this step beyond parameter adjustments)
+let recurringOfferIdCounter = 0; 
+
 function generateSupplierNPCs(products, count) {
     logFunctionStart('generateSupplierNPCs');
     const suppliers = [];
     const supplierNames = ["Farm Fresh Co.", "Reliable Goods Inc.", "Speedy Supplies Ltd.", "Global Produce", "Timber Town Supplies"];
     for (let i = 0; i < count; i++) {
+        const supplierId = `sup${i}`;
         const name = supplierNames[i % supplierNames.length] + (Math.floor(i / supplierNames.length) > 0 ? ` ${Math.floor(i / supplierNames.length) +1}` : '');
         const supplier = new Supplier(name);
+        supplier.id = supplierId; 
+
         const numProductsToOffer = Math.floor(Math.random() * Math.min(products.length, 3)) + 1; 
         let availableProducts = [...products];
+        
         if (i === 0 && products.find(p => p.name === 'Wood')) {
             const woodProduct = products.find(p => p.name === 'Wood');
             if (woodProduct) {
-                 const quantity = Math.floor(Math.random() * 151) + 50; 
+                 const quantity = Math.floor(Math.random() * 1001) + 500; 
                  const priceVariation = (Math.random() * 0.2) - 0.1; 
                  const price = parseFloat((woodProduct.basePrice * (1 + priceVariation)).toFixed(2));
                  supplier.addProduct(woodProduct, quantity, price);
@@ -215,10 +311,32 @@ function generateSupplierNPCs(products, count) {
         const remainingProductsToOffer = numProductsToOffer - supplier.inventory.length;
         for (let j = 0; j < remainingProductsToOffer && j < shuffledProducts.length; j++) {
             const product = shuffledProducts[j];
-            const quantity = Math.floor(Math.random() * 101) + 50; 
+            const quantity = Math.floor(Math.random() * 1001) + 500; 
             const priceVariation = (Math.random() * 0.2) - 0.1; 
             const price = parseFloat((product.basePrice * (1 + priceVariation)).toFixed(2));
             supplier.addProduct(product, quantity, price); 
+        }
+        supplier.setInitialStockLevels(); 
+
+        const numRecurringOffers = Math.floor(Math.random() * 2) + 1;
+        const productsForRecurring = [...products].sort(() => 0.5 - Math.random()); 
+
+        for (let k = 0; k < numRecurringOffers && k < productsForRecurring.length; k++) {
+            const productForOffer = productsForRecurring[k];
+            if (productForOffer.name === 'Wooden Chair' && productForOffer.basePrice > 10) continue; 
+
+            recurringOfferIdCounter++;
+            const offer = {
+                id: `recOffer-${recurringOfferIdCounter}`,
+                supplierId: supplier.id,
+                supplierName: supplier.name,
+                productId: productForOffer.name, 
+                productName: productForOffer.name,
+                quantityPerTurn: Math.floor(Math.random() * 41) + 10, 
+                pricePerUnit: parseFloat((productForOffer.basePrice * (0.9 + Math.random() * 0.15)).toFixed(2)), 
+                totalTurns: Math.floor(Math.random() * 11) + 10, 
+            };
+            supplier.recurringOffers.push(offer);
         }
         suppliers.push(supplier);
     }
@@ -238,7 +356,7 @@ function generateWholesalerNPCs(products, count) {
         if (i === 0 && products.find(p => p.name === 'Wooden Chair')) {
             const chairProduct = products.find(p => p.name === 'Wooden Chair');
             if (chairProduct) {
-                const quantity = Math.floor(Math.random() * 41) + 10; 
+                const quantity = Math.floor(Math.random() * 601) + 200; 
                 const priceVariation = (Math.random() * 0.50) + 0.25; 
                 const price = parseFloat((chairProduct.basePrice * (1 + priceVariation)).toFixed(2));
                 wholesaler.addDemand(chairProduct, quantity, price);
@@ -250,7 +368,7 @@ function generateWholesalerNPCs(products, count) {
         for (let j = 0; j < remainingProductsToDemand && j < shuffledProducts.length; j++) {
             const product = shuffledProducts[j];
             if (product.name === 'Wood' && name !== "Timber Town Supplies") continue; 
-            const quantity = Math.floor(Math.random() * 61) + 20; 
+            const quantity = Math.floor(Math.random() * 601) + 200; 
             const priceVariation = (Math.random() * 0.2) + 0.05; 
             const price = parseFloat((product.basePrice * (1 + priceVariation)).toFixed(2));
             wholesaler.addDemand(product, quantity, price); 
@@ -261,34 +379,35 @@ function generateWholesalerNPCs(products, count) {
     return wholesalers;
 }
 
+
 // --- Game State Variables ---
 let gameProducts = [];
 let gameSuppliers = [];
 let gameWholesalers = [];
 let player;
 let marketContracts = []; 
-let currentTurn = 0;
 const MAX_PRICE_HISTORY = 15; 
 let playerContractsSortKey = 'deadlineTurns'; 
 let playerContractsSortOrder = 'asc';       
 let productionUnitInstanceCounter = 0; 
 const RETAIL_STORE_COST_TO_OPEN = 2500;
 
-
+// Updated Production Unit Type Definition
 const availableProductionUnitTypes = [
     { 
         id: 'workshop1', 
         name: 'Small Workshop', 
         cost: 1000, 
         recipe: { 
-            input: { productName: 'Wood', quantity: 2 }, 
-            output: { productName: 'Wooden Chair', quantity: 1 }, 
-            turnsToProduce: 2 
+            input: { productName: 'Wood', quantity: 50 }, 
+            output: { productName: 'Wooden Chair', quantity: 20 }, 
+            turnsToProduce: 3 
         } 
     },
 ];
 
 // --- Market Opportunities ---
+// ... (findProfitableTrades and displayMarketOpportunities remain unchanged)
 function findProfitableTrades() {
     logFunctionStart('findProfitableTrades');
     const profitableTrades = [];
@@ -326,7 +445,6 @@ function displayMarketOpportunities() {
     logFunctionStart('displayMarketOpportunities');
     const opportunitiesDiv = document.getElementById('market-opportunities');
     if (!opportunitiesDiv) {
-        console.error("Market opportunities div not found!");
         logFunctionEnd('displayMarketOpportunities'); return;
     }
     const trades = findProfitableTrades();
@@ -386,8 +504,7 @@ function displayPlayerOwnedUnits() {
     logFunctionStart('displayPlayerOwnedUnits');
     const ownedUnitsSection = document.getElementById('player-owned-units-section');
     if (!ownedUnitsSection) {
-        logFunctionEnd('displayPlayerOwnedUnits');
-        return;
+        logFunctionEnd('displayPlayerOwnedUnits'); return;
     }
 
     let html = '<h2>My Production Units</h2>';
@@ -396,37 +513,23 @@ function displayPlayerOwnedUnits() {
     } else {
         html += '<ul>';
         player.productionUnits.forEach(unit => {
-            const inputNeeded = unit.productionRecipe.input.quantity;
-            const outputAvailable = unit.productionRecipe.output.quantity;
-            let actionButtonHTML = '';
-
-            if (unit.status === 'idle') {
-                const hasEnoughInputMaterial = player.hasEnoughProduct(unit.productionRecipe.input.productName, inputNeeded - unit.inputInventory.quantity);
-                const canLoadMore = unit.inputInventory.quantity < inputNeeded;
-                
-                if (canLoadMore) {
-                     actionButtonHTML += `<button onclick="loadMaterialsForProductionUnit('${unit.instanceId}')" ${!hasEnoughInputMaterial ? 'disabled' : ''} title="Move ${inputNeeded - unit.inputInventory.quantity} ${unit.productionRecipe.input.productName} from your inventory to this unit">
-                        Load ${inputNeeded - unit.inputInventory.quantity} ${unit.productionRecipe.input.productName}
-                    </button> ${!hasEnoughInputMaterial ? '<small style="color:red;">(Need more from player inventory)</small>' : ''} <br>`;
-                }
-               
-                if (unit.inputInventory.quantity >= inputNeeded) { 
-                    actionButtonHTML += `<button onclick="startProductionOnUnit('${unit.instanceId}')" title="Begin production cycle (consumes materials)">Start Production</button>`;
-                }
-            } else if (unit.status === 'producing') {
-                actionButtonHTML = `<p>Producing... ${unit.productionProgress} turns left.</p>`;
+            let statusText = unit.status.toUpperCase();
+            if (unit.status === 'producing') {
+                statusText += ` (${unit.productionProgress} turns left)`;
             } else if (unit.status === 'completed') {
-                actionButtonHTML = `<button onclick="collectOutputFromProductionUnit('${unit.instanceId}')" title="Move ${unit.outputInventory.quantity} ${unit.productionRecipe.output.productName} from this unit to your inventory">
-                    Collect ${unit.outputInventory.quantity} ${unit.productionRecipe.output.productName}
-                </button>`;
+                statusText += ` (Output: ${unit.productionRecipe.output.quantity} ${unit.productionRecipe.output.productName} ready)`;
+            } else if (unit.status === 'sourcing_materials') {
+                statusText = 'SOURCING MATERIALS';
+            } else if (unit.status === 'transferring_output') {
+                statusText = 'TRANSFERRING OUTPUT TO WAREHOUSE';
             }
+
 
             html += `
                 <li>
-                    <strong>${unit.name} (ID: ${unit.instanceId})</strong> - Status: ${unit.status.toUpperCase()}<br>
-                    Input: ${unit.inputInventory.quantity}/${inputNeeded} ${unit.productionRecipe.input.productName}<br>
-                    Output: ${unit.outputInventory.quantity}/${outputAvailable} ${unit.productionRecipe.output.productName}<br>
-                    ${actionButtonHTML}
+                    <strong>${unit.name} (ID: ${unit.instanceId})</strong> - Linked Warehouse: ${unit.targetWarehouseId}<br>
+                    Status: ${statusText}<br>
+                    Recipe: ${unit.productionRecipe.input.quantity} ${unit.productionRecipe.input.productName} &rarr; ${unit.productionRecipe.output.quantity} ${unit.productionRecipe.output.productName} (${unit.productionRecipe.turnsToProduce} turns)
                 </li>`;
         });
         html += '</ul>';
@@ -435,6 +538,7 @@ function displayPlayerOwnedUnits() {
     logFunctionEnd('displayPlayerOwnedUnits');
 }
 
+// ... (Other display functions: displayRetailManagement, displayPlayerInfo, etc. remain unchanged for now)
 function displayRetailManagement() {
     logFunctionStart('displayRetailManagement');
     const retailSection = document.getElementById('retail-management-section');
@@ -460,7 +564,7 @@ function displayRetailManagement() {
         
         html += '<h3>Manage Stock:</h3><ul>';
         player.retailStore.stock.forEach((item, index) => {
-            const playerInventoryItem = player.inventory.find(pInv => pInv.product.name === item.product.name);
+            const playerInventoryItem = player.getPrimaryWarehouse().inventory.find(pInv => pInv.product.name === item.product.name);
             const playerHasStock = playerInventoryItem && playerInventoryItem.quantity > 0;
 
             html += `
@@ -491,10 +595,21 @@ function displayRetailManagement() {
 function displayPlayerInfo() {
     const playerInfoDiv = document.getElementById('player-info');
     if (!playerInfoDiv || !player) return;
-    let inventoryHTML = '<ul>';
-    if (player.inventory.length === 0) inventoryHTML += '<li>Empty</li>';
-    else player.inventory.forEach(item => inventoryHTML += `<li>${item.product.name}: ${item.quantity}</li>`);
-    inventoryHTML += '</ul>';
+
+    const primaryWarehouse = player.getPrimaryWarehouse();
+    let inventoryHTML = '<p>No warehouse found.</p>'; 
+
+    if (primaryWarehouse) {
+        inventoryHTML = `<h4>${primaryWarehouse.name} (Capacity: ${primaryWarehouse.getCurrentStockLoad()}/${primaryWarehouse.capacity})</h4><ul>`;
+        if (primaryWarehouse.inventory.length === 0) {
+            inventoryHTML += '<li>Empty</li>';
+        } else {
+            primaryWarehouse.inventory.forEach(item => {
+                inventoryHTML += `<li>${item.product.name}: ${item.quantity}</li>`;
+            });
+        }
+        inventoryHTML += '</ul>';
+    }
     
     const netProfit = player.lastTurnIncome - player.lastTurnExpenses;
     let profitColor = netProfit >= 0 ? 'green' : 'red';
@@ -510,7 +625,7 @@ function displayPlayerInfo() {
     playerInfoDiv.innerHTML = `
         <p><strong>Money:</strong> $${player.money.toFixed(2)}</p>
         <p><strong>Turn:</strong> ${currentTurn}</p>
-        <p><strong>Inventory:</strong></p>${inventoryHTML}
+        <p><strong>Main Warehouse Inventory:</strong></p>${inventoryHTML}
         ${financialSummaryHTML}`; 
 }
 
@@ -681,6 +796,77 @@ function displayContracts() {
     logFunctionEnd('displayContracts');
 }
 
+function displayRecurringContractOffers() {
+    logFunctionStart('displayRecurringContractOffers');
+    const offersSection = document.getElementById('recurring-contracts-offers-section');
+    if (!offersSection) { 
+        logFunctionEnd('displayRecurringContractOffers');
+        return; 
+    }
+
+    let html = '<h2>Recurring Supply Offers</h2>';
+    let hasOffers = false;
+    gameSuppliers.forEach((supplier) => { 
+        if (supplier.recurringOffers && supplier.recurringOffers.length > 0) {
+            if (!hasOffers) {
+                html += '<ul>';
+                hasOffers = true;
+            }
+            supplier.recurringOffers.forEach((offer) => { 
+                html += `
+                    <li>
+                        <strong>Supplier:</strong> ${offer.supplierName}<br>
+                        <strong>Product:</strong> ${offer.productName}<br>
+                        <strong>Quantity/Turn:</strong> ${offer.quantityPerTurn}<br>
+                        <strong>Price/Unit:</strong> $${offer.pricePerUnit.toFixed(2)}<br>
+                        <strong>Total Turns:</strong> ${offer.totalTurns}<br>
+                        <button onclick="acceptRecurringContract('${supplier.id}', '${offer.id}')" title="Accept this recurring supply contract from ${offer.supplierName}">Accept Offer</button>
+                    </li>`;
+            });
+        }
+    });
+
+    if (!hasOffers) {
+        html += "<p>No recurring contract offers currently available.</p>";
+    } else {
+        html += "</ul>";
+    }
+    offersSection.innerHTML = html;
+    logFunctionEnd('displayRecurringContractOffers');
+}
+
+function displayPlayerActiveRecurringContracts() {
+    logFunctionStart('displayPlayerActiveRecurringContracts');
+    const activeRecurringSection = document.getElementById('player-active-recurring-contracts-section');
+    if(!activeRecurringSection) {
+        logFunctionEnd('displayPlayerActiveRecurringContracts');
+        return;
+    }
+
+    let html = '<h2>My Recurring Supply Contracts</h2>';
+    if (!player || player.recurringSupplyContracts.length === 0) {
+        html += "<p>You have no active recurring supply contracts.</p>";
+    } else {
+        html += '<ul>';
+        player.recurringSupplyContracts.forEach(contract => {
+            html += `
+                <li>
+                    <strong>Supplier:</strong> ${contract.supplierName}<br>
+                    <strong>Product:</strong> ${contract.productName}<br>
+                    <strong>Quantity/Turn:</strong> ${contract.quantityPerTurn}<br>
+                    <strong>Price/Unit:</strong> $${contract.pricePerUnit.toFixed(2)}<br>
+                    <strong>Turns Remaining:</strong> ${contract.turnsRemaining} / ${contract.totalTurns}<br>
+                    <strong>Status:</strong> ${contract.status.toUpperCase()}
+                    ${contract.status === 'active' ? `<button onclick="cancelRecurringContract('${contract.id}')" title="Cancel this recurring contract">Cancel</button>` : ''}
+                </li>`;
+        });
+        html += '</ul>';
+    }
+    activeRecurringSection.innerHTML = html;
+    logFunctionEnd('displayPlayerActiveRecurringContracts');
+}
+
+
 function refreshAllDisplays() {
     logFunctionStart('refreshAllDisplays');
     displayPlayerInfo();
@@ -692,10 +878,69 @@ function refreshAllDisplays() {
     displayAvailableProductionUnits(); 
     displayPlayerOwnedUnits(); 
     displayRetailManagement(); 
+    displayRecurringContractOffers(); 
+    displayPlayerActiveRecurringContracts(); 
     logFunctionEnd('refreshAllDisplays');
 }
 
 // --- Player Action Functions ---
+
+function acceptRecurringContract(supplierId, offerId) {
+    logFunctionStart('acceptRecurringContract');
+    console.log(`Attempting to accept recurring offer: ${offerId} from supplier: ${supplierId}`);
+    const supplier = gameSuppliers.find(s => s.id === supplierId);
+    if (!supplier) {
+        showNotification("Supplier for the recurring offer not found.", "error");
+        logFunctionEnd('acceptRecurringContract');
+        return;
+    }
+    const offerIndex = supplier.recurringOffers.findIndex(o => o.id === offerId);
+    if (offerIndex === -1) {
+        showNotification("Recurring offer not found or already accepted.", "error");
+        logFunctionEnd('acceptRecurringContract');
+        return;
+    }
+    const offer = supplier.recurringOffers[offerIndex];
+
+    const newRecurringContract = new RecurringSupplyContract(
+        `playerRec-${Date.now().toString(36)}${Math.random().toString(36).substr(2,3)}`, 
+        offer.supplierId,
+        offer.supplierName,
+        offer.productId,
+        offer.productName,
+        offer.quantityPerTurn,
+        offer.pricePerUnit,
+        offer.totalTurns,
+        player.getPrimaryWarehouse().id 
+    );
+
+    player.recurringSupplyContracts.push(newRecurringContract);
+    supplier.recurringOffers.splice(offerIndex, 1); 
+
+    showNotification(`Accepted recurring supply contract for ${offer.productName} from ${offer.supplierName}.`, "success");
+    refreshAllDisplays();
+    logFunctionEnd('acceptRecurringContract');
+}
+
+function cancelRecurringContract(contractId) {
+    logFunctionStart('cancelRecurringContract');
+    const contractIndex = player.recurringSupplyContracts.findIndex(c => c.id === contractId);
+    if (contractIndex === -1) {
+        showNotification("Recurring contract not found.", "error");
+        logFunctionEnd('cancelRecurringContract');
+        return;
+    }
+    const contract = player.recurringSupplyContracts[contractIndex];
+    if (contract.status === 'active') {
+        contract.status = 'cancelled';
+        showNotification(`Recurring contract for ${contract.productName} from ${contract.supplierName} has been cancelled.`, 'info');
+    } else {
+        showNotification(`Contract is already ${contract.status}.`, 'info');
+    }
+    refreshAllDisplays();
+    logFunctionEnd('cancelRecurringContract');
+}
+
 function openRetailStore() {
     logFunctionStart('openRetailStore');
     if (player.retailStore) {
@@ -738,8 +983,8 @@ function addStockToRetail(productName, quantityStr) {
         showNotification("You don't own a retail store.", 'error');
         logFunctionEnd('addStockToRetail'); return;
     }
-    if (!player.hasEnoughProduct(productName, quantity)) {
-        showNotification(`Not enough ${productName} in your inventory.`, 'error');
+    if (!player.hasEnoughProduct(productName, quantity)) { 
+        showNotification(`Not enough ${productName} in your warehouse inventory.`, 'error');
         logFunctionEnd('addStockToRetail'); return;
     }
 
@@ -749,9 +994,12 @@ function addStockToRetail(productName, quantityStr) {
         logFunctionEnd('addStockToRetail'); return;
     }
 
-    player.removeProductFromInventory(productName, quantity);
-    storeItem.quantity += quantity;
-    showNotification(`Added ${quantity} ${productName} to your retail store.`, 'success');
+    if (player.removeProductFromWarehouse(productName, quantity)) { 
+        storeItem.quantity += quantity;
+        showNotification(`Added ${quantity} ${productName} to your retail store.`, 'success');
+    } else {
+        showNotification(`Failed to remove ${productName} from warehouse.`, 'error');
+    }
     refreshAllDisplays();
     logFunctionEnd('addStockToRetail');
 }
@@ -829,12 +1077,14 @@ function buyProductionUnit(unitTypeId) {
     player.money -= unitType.cost;
     player.lastTurnExpenses += unitType.cost; 
     productionUnitInstanceCounter++;
+    const primaryWarehouseId = player.getPrimaryWarehouse() ? player.getPrimaryWarehouse().id : 'wh0'; // Fallback, though should exist
     const newUnit = new ProductionUnit(
         unitType.id, 
         unitType.name, 
         unitType.cost, 
         unitType.recipe, 
-        `unit-${productionUnitInstanceCounter}` 
+        `unit-${productionUnitInstanceCounter}`,
+        primaryWarehouseId // Link to primary warehouse
     );
     player.productionUnits.push(newUnit);
     showNotification(`Successfully purchased ${unitType.name}!`, 'success');
@@ -844,82 +1094,18 @@ function buyProductionUnit(unitTypeId) {
 }
 
 function loadMaterialsForProductionUnit(unitInstanceId) {
-    logFunctionStart('loadMaterialsForProductionUnit');
-    const unit = player.productionUnits.find(u => u.instanceId === unitInstanceId);
-    if (!unit || unit.status !== 'idle') {
-        showNotification("Production unit not found or not idle.", 'error');
-        logFunctionEnd('loadMaterialsForProductionUnit');
-        return;
-    }
-
-    const neededProductName = unit.productionRecipe.input.productName;
-    const neededQuantity = unit.productionRecipe.input.quantity - unit.inputInventory.quantity;
-
-    if (neededQuantity <= 0) {
-        showNotification("Input inventory is already full for this unit.", 'info');
-        logFunctionEnd('loadMaterialsForProductionUnit');
-        return;
-    }
-
-    if (player.hasEnoughProduct(neededProductName, neededQuantity)) {
-        player.removeProductFromInventory(neededProductName, neededQuantity);
-        unit.inputInventory.quantity += neededQuantity;
-        showNotification(`Loaded ${neededQuantity} ${neededProductName} into ${unit.name}.`, 'success');
-    } else {
-        showNotification(`Not enough ${neededProductName} in player inventory. Need ${neededQuantity}.`, 'error');
-    }
-    refreshAllDisplays();
-    logFunctionEnd('loadMaterialsForProductionUnit');
+    // This function is now obsolete due to automation. Kept for potential future manual override.
+    showNotification("Production units operate automatically. Manual loading disabled.", "info");
 }
 
 function startProductionOnUnit(unitInstanceId) {
-    logFunctionStart('startProductionOnUnit');
-    const unit = player.productionUnits.find(u => u.instanceId === unitInstanceId);
-    if (!unit || unit.status !== 'idle') {
-        showNotification("Production unit not found or not idle.", 'error');
-        logFunctionEnd('startProductionOnUnit');
-        return;
-    }
-
-    if (unit.inputInventory.quantity < unit.productionRecipe.input.quantity) {
-        showNotification(`Not enough ${unit.productionRecipe.input.productName} loaded to start production.`, 'error');
-        logFunctionEnd('startProductionOnUnit');
-        return;
-    }
-
-    unit.status = 'producing';
-    unit.productionProgress = unit.productionRecipe.turnsToProduce;
-    unit.inputInventory.quantity -= unit.productionRecipe.input.quantity; 
-
-    showNotification(`${unit.name} started production of ${unit.productionRecipe.output.productName}.`, 'success');
-    refreshAllDisplays();
-    logFunctionEnd('startProductionOnUnit');
+    // This function is now obsolete.
+    showNotification("Production units operate automatically. Manual start disabled.", "info");
 }
 
 function collectOutputFromProductionUnit(unitInstanceId) {
-    logFunctionStart('collectOutputFromProductionUnit');
-    const unit = player.productionUnits.find(u => u.instanceId === unitInstanceId);
-    if (!unit || unit.status !== 'completed') {
-        showNotification("Production unit not found or not completed.", 'error');
-        logFunctionEnd('collectOutputFromProductionUnit');
-        return;
-    }
-    
-    const outputProductName = unit.productionRecipe.output.productName;
-    const outputQuantity = unit.outputInventory.quantity;
-    const outputProduct = gameProducts.find(p => p.name === outputProductName);
-
-
-    if (outputQuantity > 0 && outputProduct) {
-        player.addProductToInventory(outputProduct, outputQuantity);
-        unit.outputInventory.quantity = 0; 
-        unit.status = 'idle'; 
-        showNotification(`Collected ${outputQuantity} ${outputProductName} from ${unit.name}.`, 'success');
-    } else {
-        showNotification(`No output to collect from ${unit.name} or output product definition missing.`, 'error');
-    }
-    refreshAllDisplays();
-    logFunctionEnd('collectOutputFromProductionUnit');
+    // This function is now obsolete.
+    showNotification("Production units operate automatically. Manual collection disabled.", "info");
 }
 
 function acceptContract(contractId) { 
@@ -937,6 +1123,7 @@ function acceptContract(contractId) {
     }
     logFunctionEnd('acceptContract');
 }
+
 function buyFromSupplier(supplierIndex, productIndex, quantityStr) { 
     logFunctionStart('buyFromSupplier');
     const quantity = parseInt(quantityStr);
@@ -947,6 +1134,7 @@ function buyFromSupplier(supplierIndex, productIndex, quantityStr) {
     const supplier = gameSuppliers[supplierIndex];
     const productItem = supplier.inventory[productIndex];
     const cost = productItem.price * quantity;
+
     if (productItem.quantity < quantity) {
         showNotification(`Supplier ${supplier.name} does not have ${quantity} of ${productItem.product.name}. Available: ${productItem.quantity}.`, 'error');
         logFunctionEnd('buyFromSupplier'); return;
@@ -955,9 +1143,16 @@ function buyFromSupplier(supplierIndex, productIndex, quantityStr) {
         showNotification(`Not enough money to buy ${quantity} of ${productItem.product.name}. Cost: $${cost.toFixed(2)}, You have: $${player.money.toFixed(2)}.`, 'error');
         logFunctionEnd('buyFromSupplier'); return;
     }
+    
+    const primaryWarehouse = player.getPrimaryWarehouse();
+    if (!primaryWarehouse || primaryWarehouse.getCurrentStockLoad() + quantity > primaryWarehouse.capacity) {
+        showNotification(`Cannot buy ${quantity} ${productItem.product.name}. Primary warehouse will exceed capacity.`, 'error');
+        logFunctionEnd('buyFromSupplier'); return;
+    }
+
     player.money -= cost; 
     player.lastTurnExpenses += cost; 
-    player.addProductToInventory(productItem.product, quantity); 
+    player.addProductToWarehouse(productItem.product, quantity); 
     productItem.quantity -= quantity;
     const priceIncreaseFactor = 0.01 + (Math.random() * 0.04); 
     productItem.price = parseFloat(Math.min(productItem.price * (1 + priceIncreaseFactor), productItem.basePrice * 1.5).toFixed(2)); 
@@ -965,6 +1160,7 @@ function buyFromSupplier(supplierIndex, productIndex, quantityStr) {
     refreshAllDisplays();
     logFunctionEnd('buyFromSupplier');
 }
+
 function sellToWholesaler(wholesalerIndex, productIndex, quantityStr) { 
     logFunctionStart('sellToWholesaler');
     const quantity = parseInt(quantityStr);
@@ -975,15 +1171,17 @@ function sellToWholesaler(wholesalerIndex, productIndex, quantityStr) {
     const wholesaler = gameWholesalers[wholesalerIndex];
     const demandItem = wholesaler.demand[productIndex];
     const revenue = demandItem.price * quantity;
+
     if (demandItem.quantity < quantity) {
         showNotification(`Wholesaler ${wholesaler.name} does not demand ${quantity} of ${demandItem.product.name}. Demands: ${demandItem.quantity}.`, 'error');
         logFunctionEnd('sellToWholesaler'); return;
     }
-    if (!player.hasEnoughProduct(demandItem.product.name, quantity)) {
-        showNotification(`Not enough ${demandItem.product.name} in inventory to sell ${quantity}.`, 'error');
+    if (!player.hasEnoughProduct(demandItem.product.name, quantity)) { 
+        showNotification(`Not enough ${demandItem.product.name} in your warehouse to sell ${quantity}.`, 'error');
         logFunctionEnd('sellToWholesaler'); return;
     }
-    if(player.removeProductFromInventory(demandItem.product.name, quantity)) {
+
+    if(player.removeProductFromWarehouse(demandItem.product.name, quantity)) { 
         player.money += revenue; 
         player.lastTurnIncome += revenue; 
         demandItem.quantity -= quantity; 
@@ -992,11 +1190,12 @@ function sellToWholesaler(wholesalerIndex, productIndex, quantityStr) {
         demandItem.price = parseFloat(Math.max(demandItem.price * (1 - priceDecreaseFactor), demandItem.initialDemandPrice * 0.7).toFixed(2)); 
         showNotification(`Sold ${quantity} of ${demandItem.product.name} to ${wholesaler.name} for $${revenue.toFixed(2)}.`, 'success');
     } else {
-        showNotification(`Error selling ${demandItem.product.name}. Inventory inconsistency.`, 'error');
+        showNotification(`Error selling ${demandItem.product.name}. Warehouse inventory inconsistency.`, 'error');
     }
     refreshAllDisplays();
     logFunctionEnd('sellToWholesaler');
 }
+
 function fulfillContract(contractId) { 
     logFunctionStart('fulfillContract');
     const contractIndex = player.acceptedContracts.findIndex(c => c.id === contractId);
@@ -1006,18 +1205,21 @@ function fulfillContract(contractId) {
     }
     const contract = player.acceptedContracts[contractIndex];
     const revenue = contract.quantity * contract.pricePerUnit;
-    if (!player.hasEnoughProduct(contract.productName, contract.quantity)) {
-        const playerProduct = player.inventory.find(item => item.product.name === contract.productName);
-        showNotification(`Cannot fulfill contract for ${contract.productName}. Insufficient stock. Player has ${playerProduct ? playerProduct.quantity : 0}/${contract.quantity} needed.`, 'error');
+
+    if (!player.hasEnoughProduct(contract.productName, contract.quantity)) { 
+        const primaryWarehouse = player.getPrimaryWarehouse();
+        const qtyInWarehouse = primaryWarehouse ? primaryWarehouse.getProductQuantity(contract.productName) : 0;
+        showNotification(`Cannot fulfill contract for ${contract.productName}. Insufficient stock in warehouse. Player has ${qtyInWarehouse}/${contract.quantity} needed.`, 'error');
         logFunctionEnd('fulfillContract'); return;
     }
-    if (player.removeProductFromInventory(contract.productName, contract.quantity)) {
+
+    if (player.removeProductFromWarehouse(contract.productName, contract.quantity)) { 
         player.money += revenue; 
         player.lastTurnIncome += revenue; 
         contract.status = 'fulfilled';
         showNotification(`Contract for ${contract.productName} fulfilled! Player earned $${revenue.toFixed(2)}.`, 'success');
     } else {
-        showNotification(`Error fulfilling contract ${contract.productName}: Failed to remove product.`, 'error');
+        showNotification(`Error fulfilling contract ${contract.productName}: Failed to remove product from warehouse.`, 'error');
     }
     refreshAllDisplays();
     logFunctionEnd('fulfillContract');
@@ -1057,18 +1259,80 @@ function initializeGame() {
     ];
     gameSuppliers = generateSupplierNPCs(gameProducts, 3); 
     gameWholesalers = generateWholesalerNPCs(gameProducts, 3); 
-    player = new Player(2000); 
+    player = new Player(5000); 
     marketContracts = []; 
     gameWholesalers.forEach(wholesaler => {
+        const baseQuantity = Math.floor(Math.random() * 201) + 100; 
         for (let i = 0; i < (Math.floor(Math.random() * 2) + 1); i++) { 
-            const contract = wholesaler.generateContract();
-            if (contract) marketContracts.push(contract);
+            const demandItem = wholesaler.demand[Math.floor(Math.random() * wholesaler.demand.length)];
+            if (demandItem && demandItem.product) { 
+                 const contractQuantity = Math.min(baseQuantity, Math.floor(demandItem.initialQuantity * (Math.random() * 0.5 + 0.25))); 
+                 const contractPricePerUnit = parseFloat((demandItem.price * 1.05).toFixed(2)); 
+                 const deadline = currentTurn + Math.floor(Math.random() * 6) + 5; 
+                 marketContracts.push(new Contract(demandItem.product.name, contractQuantity, contractPricePerUnit, deadline, wholesaler.name));
+            }
         }
     });
     setupEventListeners(); 
     refreshAllDisplays(); 
     logFunctionEnd('initializeGame');
 }
+
+function manageAutomatedProduction() {
+    logFunctionStart('manageAutomatedProduction');
+    if (!player || !player.productionUnits || player.productionUnits.length === 0) {
+        logFunctionEnd('manageAutomatedProduction');
+        return;
+    }
+
+    player.productionUnits.forEach(unit => {
+        const recipe = unit.productionRecipe;
+        const inputProduct = gameProducts.find(p => p.name === recipe.input.productName);
+        const outputProduct = gameProducts.find(p => p.name === recipe.output.productName);
+        const targetWarehouse = player.warehouses.find(wh => wh.id === unit.targetWarehouseId) || player.getPrimaryWarehouse();
+
+        if (!targetWarehouse) {
+            console.error(`Production unit ${unit.name} has no valid target warehouse.`);
+            return; // Skip this unit
+        }
+
+        if (unit.status === 'idle') {
+            // Check if output needs to be cleared (conceptual, as output is directly moved)
+            // Check if enough materials are in the targetWarehouse
+            if (player.hasEnoughProduct(recipe.input.productName, recipe.input.quantity, targetWarehouse.id)) {
+                if (player.removeProductFromWarehouse(recipe.input.productName, recipe.input.quantity, targetWarehouse.id)) {
+                    unit.status = 'producing';
+                    unit.productionProgress = recipe.turnsToProduce;
+                    showNotification(`${unit.name} started producing ${recipe.output.quantity} ${recipe.output.productName}.`, 'info');
+                    console.log(`${unit.name} (ID: ${unit.instanceId}) automatically started. Input: ${recipe.input.quantity} ${recipe.input.productName} from ${targetWarehouse.name}.`);
+                } else {
+                     console.log(`${unit.name} (ID: ${unit.instanceId}) could not remove materials from ${targetWarehouse.name} despite hasEnoughProduct check.`);
+                }
+            } else {
+                 // console.log(`${unit.name} (ID: ${unit.instanceId}) idle, not enough ${recipe.input.productName} in ${targetWarehouse.name}.`);
+            }
+        } else if (unit.status === 'producing') {
+            unit.productionProgress--;
+            if (unit.productionProgress <= 0) {
+                unit.status = 'completed';
+                // Output is conceptually ready in the unit
+                showNotification(`${unit.name} finished producing ${recipe.output.quantity} ${recipe.output.productName}. Output ready to transfer.`, 'success');
+                console.log(`${unit.name} (ID: ${unit.instanceId}) finished production. Output: ${recipe.output.quantity} ${recipe.output.productName}.`);
+            }
+        } else if (unit.status === 'completed') {
+            if (player.addProductToWarehouse(outputProduct, recipe.output.quantity, targetWarehouse.id)) {
+                unit.status = 'idle'; // Ready for next cycle
+                showNotification(`Transferred ${recipe.output.quantity} ${recipe.output.productName} from ${unit.name} to ${targetWarehouse.name}.`, 'success');
+                console.log(`${unit.name} (ID: ${unit.instanceId}) transferred output to ${targetWarehouse.name}. Now idle.`);
+            } else {
+                showNotification(`Warehouse ${targetWarehouse.name} is full. Cannot transfer ${recipe.output.quantity} ${recipe.output.productName} from ${unit.name}.`, 'warning');
+                console.log(`${unit.name} (ID: ${unit.instanceId}) output transfer failed, warehouse ${targetWarehouse.name} full.`);
+            }
+        }
+    });
+    logFunctionEnd('manageAutomatedProduction');
+}
+
 
 function advanceTurn() {
     logFunctionStart('advanceTurn');
@@ -1077,10 +1341,9 @@ function advanceTurn() {
         showNotification("Player data is not initialized. Please reload the game.", "error");
         console.error("CRITICAL: Player object is not initialized in advanceTurn. Game cannot proceed.");
         logFunctionEnd('advanceTurn');
-        return; // Stop execution if player is not initialized
+        return; 
     }
     
-    // Reset last turn's finances at the beginning of the new turn
     player.lastTurnIncome = 0;
     player.lastTurnExpenses = 0;
 
@@ -1105,17 +1368,7 @@ function advanceTurn() {
     });
     player.acceptedContracts = player.acceptedContracts.filter(c => c.status !== 'expired' && c.status !== 'fulfilled');
     
-    player.productionUnits.forEach(unit => {
-        if (unit.status === 'producing') {
-            unit.productionProgress--;
-            if (unit.productionProgress <= 0) {
-                unit.status = 'completed';
-                unit.outputInventory.quantity += unit.productionRecipe.output.quantity; 
-                showNotification(`${unit.name} has finished producing ${unit.productionRecipe.output.quantity} ${unit.productionRecipe.output.productName}!`, 'success');
-                console.log(`${unit.name} (ID: ${unit.instanceId}) finished production. Output: ${unit.outputInventory.quantity} ${unit.outputInventory.productName}`);
-            }
-        }
-    });
+    manageAutomatedProduction(); // Call the new function
 
     if (player.retailStore) {
         let totalRetailSalesThisTurn = 0;
@@ -1139,16 +1392,53 @@ function advanceTurn() {
                     player.retailStore.cashRegister += revenueFromSale; 
                     totalRetailSalesThisTurn += revenueFromSale;
                     salesSummary.push(`${actualSales} ${item.product.name} for $${revenueFromSale.toFixed(2)}`);
-                    console.log(`Retail Sale: Sold ${actualSales} of ${item.product.name} at $${item.price} each. Store cash: $${player.retailStore.cashRegister.toFixed(2)}`);
+                    // console.log(`Retail Sale: Sold ${actualSales} of ${item.product.name} at $${item.price} each. Store cash: $${player.retailStore.cashRegister.toFixed(2)}`);
                 }
             }
         });
         if (salesSummary.length > 0) {
             showNotification(`Your store sold: ${salesSummary.join(', ')}. Total: $${totalRetailSalesThisTurn.toFixed(2)}.`, 'success');
         } else {
-            console.log("No retail sales this turn.");
+            // console.log("No retail sales this turn.");
         }
     }
+    
+    if (player.recurringSupplyContracts) {
+        player.recurringSupplyContracts.forEach(recContract => {
+            if (recContract.status === 'active' && recContract.turnsRemaining > 0) {
+                const cost = recContract.quantityPerTurn * recContract.pricePerUnit;
+                const primaryWarehouse = player.getPrimaryWarehouse();
+                const productForContract = gameProducts.find(p => p.name === recContract.productName);
+
+                if (!productForContract) {
+                    console.error(`Product ${recContract.productName} for recurring contract not found in gameProducts.`);
+                    recContract.status = 'cancelled';
+                    showNotification(`Recurring contract for ${recContract.productName} cancelled due to product definition error.`, "error");
+                    return;
+                }
+
+                if (player.money >= cost) {
+                    if (primaryWarehouse.addProduct(productForContract, recContract.quantityPerTurn)) {
+                        player.money -= cost;
+                        player.lastTurnExpenses += cost;
+                        recContract.turnsRemaining--;
+                        showNotification(`Recurring delivery of ${recContract.quantityPerTurn} ${recContract.productName} from ${recContract.supplierName} received. Cost: $${cost.toFixed(2)}. ${recContract.turnsRemaining} turns remaining.`, "info");
+                        if (recContract.turnsRemaining === 0) {
+                            recContract.status = 'completed';
+                            showNotification(`Recurring contract for ${recContract.productName} from ${recContract.supplierName} completed.`, "success");
+                        }
+                    } else {
+                        showNotification(`Warehouse full! Delivery of ${recContract.quantityPerTurn} ${recContract.productName} from ${recContract.supplierName} failed. Contract active, will retry.`, "warning");
+                    }
+                } else {
+                    recContract.status = 'cancelled'; 
+                    showNotification(`Recurring contract for ${recContract.productName} from ${recContract.supplierName} cancelled due to insufficient funds.`, "error");
+                }
+            }
+        });
+         player.recurringSupplyContracts = player.recurringSupplyContracts.filter(rc => rc.status === 'active' || rc.status === 'paused'); // Keep active/paused, remove completed/cancelled
+    }
+
 
     const maxMarketContractsPerWholesaler = 2;
     gameWholesalers.forEach(wholesaler => {
@@ -1166,4 +1456,7 @@ function advanceTurn() {
 
 // Call initializeGame when the script loads
 initializeGame();
-console.log('--- Script End ---');
+
+// --- Test Suite ---
+// runTestSuite(); // This will be called from the test execution environment if needed.
+// console.log('--- Script and Test Suite End ---'); // This will also be part of runTestSuite or test execution.
