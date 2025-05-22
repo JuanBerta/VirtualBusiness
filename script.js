@@ -110,6 +110,26 @@ class Supplier {
             this.initialStockLevels.set(item.product.name, item.quantity);
         });
     }
+
+    sellToNPC(productName, quantity) {
+        logFunctionStart(`Supplier.sellToNPC (${this.name})`);
+        const productIndex = this.inventory.findIndex(item => item.product.name === productName);
+        if (productIndex > -1) {
+            if (this.inventory[productIndex].quantity >= quantity) {
+                this.inventory[productIndex].quantity -= quantity;
+                // console.log(`${this.name} sold ${quantity} of ${productName} to an NPC. Stock remaining: ${this.inventory[productIndex].quantity}`);
+                logFunctionEnd(`Supplier.sellToNPC (${this.name})`);
+                return true;
+            } else {
+                // console.log(`${this.name} does not have enough ${productName} to sell ${quantity} to NPC.`);
+                logFunctionEnd(`Supplier.sellToNPC (${this.name})`);
+                return false;
+            }
+        }
+        // console.log(`${productName} not found in ${this.name}'s inventory for NPC sale.`);
+        logFunctionEnd(`Supplier.sellToNPC (${this.name})`);
+        return false;
+    }
 }
 
 class Wholesaler {
@@ -149,9 +169,24 @@ class Wholesaler {
                 item.turnsWithoutPurchase++;
                 if (item.turnsWithoutPurchase > 2) currentPrice += initialPrice * 0.01;
             }
-            item.unitsPurchasedLastTurn = 0;
+            item.unitsPurchasedLastTurn = 0; 
             item.price = parseFloat(Math.max(initialPrice * 0.7, Math.min(currentPrice, initialPrice * 1.3)).toFixed(2));
         });
+    }
+
+    buyFromNPC(productName, quantity) {
+        logFunctionStart(`Wholesaler.buyFromNPC (${this.name})`);
+        const demandItem = this.demand.find(item => item.product.name === productName);
+        if (demandItem && demandItem.quantity >= quantity) {
+            demandItem.quantity -= quantity;
+            demandItem.unitsPurchasedLastTurn += quantity; 
+            // console.log(`${this.name} bought ${quantity} of ${productName} from an NPC. Demand remaining: ${demandItem.quantity}`);
+            logFunctionEnd(`Wholesaler.buyFromNPC (${this.name})`);
+            return true;
+        }
+        // console.log(`${this.name} could not buy ${quantity} of ${productName} from NPC (not enough demand or product not found).`);
+        logFunctionEnd(`Wholesaler.buyFromNPC (${this.name})`);
+        return false;
     }
 }
 
@@ -191,12 +226,9 @@ class ProductionUnit {
         this.name = name; 
         this.cost = cost; 
         this.productionRecipe = productionRecipe; 
-        this.targetWarehouseId = targetWarehouseId; // Added
-        this.status = 'idle'; // idle, sourcing_materials, producing, completed (output ready), transferring_output
+        this.targetWarehouseId = targetWarehouseId; 
+        this.status = 'idle'; 
         this.productionProgress = 0; 
-        // Input and output are now conceptual; materials are directly pulled from/pushed to warehouse
-        // this.inputInventory = { productName: productionRecipe.input.productName, quantity: 0, capacity: productionRecipe.input.quantity };
-        // this.outputInventory = { productName: productionRecipe.output.productName, quantity: 0, capacity: productionRecipe.output.quantity };
     }
 }
 
@@ -211,6 +243,101 @@ class RetailStore {
     }
 }
 
+class NPCCompany {
+    constructor(id, name, money, strategy) {
+        this.id = id;
+        this.name = name;
+        this.money = money;
+        this.inventory = {}; 
+        this.strategy = strategy; 
+        this.buyOffersForPlayer = []; 
+        this.acceptedContractsFromPlayer = []; 
+        this.lastActivity = "Observing market..."; // Stretch Goal
+    }
+
+    updateInventory(productName, quantity) {
+        this.inventory[productName] = (this.inventory[productName] || 0) + quantity;
+        if (this.inventory[productName] <= 0) { 
+            delete this.inventory[productName];
+        }
+        // console.log(`${this.name} inventory update: ${productName} new quantity ${this.inventory[productName] || 0}`);
+    }
+
+    canAfford(cost) {
+        return this.money >= cost;
+    }
+
+    generateBuyOfferForPlayer(gameProducts) {
+        // logFunctionStart(`NPCCompany.generateBuyOfferForPlayer (${this.name})`);
+        if (this.buyOffersForPlayer.filter(o => o.status === 'pending').length >= 2) {
+            // logFunctionEnd(`NPCCompany.generateBuyOfferForPlayer (${this.name}) - too many pending offers`);
+            return;
+        }
+
+        if (Math.random() > 0.2) { 
+            // logFunctionEnd(`NPCCompany.generateBuyOfferForPlayer (${this.name}) - no offer this turn (random chance)`);
+            this.lastActivity = "Considered making a purchase order for player, but decided against it this turn.";
+            return;
+        }
+
+        let wantedProduct = null;
+        if (this.strategy === 'RAW_MATERIAL_FOCUS' && (this.inventory['Wood'] || 0) < 150) {
+            wantedProduct = gameProducts.find(p => p.name === 'Wood');
+        } else if (this.strategy === 'FINISHED_GOODS_FOCUS' && (this.inventory['Wooden Chair'] || 0) < 75) {
+            wantedProduct = gameProducts.find(p => p.name === 'Wooden Chair');
+        } else if (this.strategy === 'GENERAL_TRADER' || this.strategy === 'BALANCED_OPERATOR') {
+            const potentialProducts = gameProducts.filter(p => (this.inventory[p.name] || 0) < 50);
+            if (potentialProducts.length > 0) {
+                wantedProduct = potentialProducts[Math.floor(Math.random() * potentialProducts.length)];
+            }
+        }
+
+        if (!wantedProduct) {
+            // logFunctionEnd(`NPCCompany.generateBuyOfferForPlayer (${this.name}) - no product chosen by strategy`);
+            this.lastActivity = "Evaluated product needs, no new purchase orders for player.";
+            return;
+        }
+        
+        const quantity = Math.floor(Math.random() * 81) + 20; // 20-100 units
+        let typicalWholesalerPrice = 0;
+        let demandCount = 0;
+        gameWholesalers.forEach(wh => {
+            wh.demand.forEach(d => {
+                if(d.product.name === wantedProduct.name) {
+                    typicalWholesalerPrice += d.price;
+                    demandCount++;
+                }
+            });
+        });
+        const avgWholesalerPrice = demandCount > 0 ? typicalWholesalerPrice / demandCount : 0;
+        
+        let pricePerUnit = wantedProduct.basePrice * (1.1 + Math.random() * 0.2); 
+        if (avgWholesalerPrice > 0 && avgWholesalerPrice > pricePerUnit) {
+            pricePerUnit = avgWholesalerPrice * (1.02 + Math.random() * 0.08); 
+        }
+        pricePerUnit = parseFloat(pricePerUnit.toFixed(2));
+
+        const deadlineTurns = currentTurn + Math.floor(Math.random() * 11) + 5; 
+        const offerId = `npcOffer-${this.id}-${Date.now().toString(36)}${Math.random().toString(36).substr(2,3)}`;
+
+        const newOffer = {
+            offerId: offerId,
+            npcId: this.id,
+            npcName: this.name,
+            productName: wantedProduct.name,
+            quantity: quantity,
+            pricePerUnit: pricePerUnit,
+            deadlineTurns: deadlineTurns,
+            status: 'pending' 
+        };
+
+        this.buyOffersForPlayer.push(newOffer);
+        this.lastActivity = `Issued a buy offer for ${quantity} ${wantedProduct.name}.`;
+        console.log(`${this.name} generated buy offer for player: ${quantity} of ${wantedProduct.name} @ $${pricePerUnit}/unit, deadline Turn ${deadlineTurns}. Offer ID: ${offerId}`);
+        // logFunctionEnd(`NPCCompany.generateBuyOfferForPlayer (${this.name})`);
+    }
+}
+
 class Player {
     constructor(initialMoney = 1000) {
         this.money = initialMoney;
@@ -221,6 +348,7 @@ class Player {
         this.lastTurnIncome = 0;
         this.lastTurnExpenses = 0;
         this.recurringSupplyContracts = []; 
+        this.deliveryContractsToNPCs = []; 
 
         const mainWarehouse = new Warehouse('wh0', 'Main Warehouse', 5000);
         this.warehouses.push(mainWarehouse);
@@ -391,8 +519,13 @@ let playerContractsSortKey = 'deadlineTurns';
 let playerContractsSortOrder = 'asc';       
 let productionUnitInstanceCounter = 0; 
 const RETAIL_STORE_COST_TO_OPEN = 2500;
+let npcCompanies = []; 
+let npcCompanyIdCounter = 0; 
 
-// Updated Production Unit Type Definition
+const NPC_COMPANY_NAMES = ["Alpha Trading Co.", "Reliable Resources Inc.", "General Goods Ltd.", "Pioneer Ventures", "Apex Solutions", "Global Dynamics"];
+const NPC_STRATEGIES = ['RAW_MATERIAL_FOCUS', 'FINISHED_GOODS_FOCUS', 'GENERAL_TRADER', 'BALANCED_OPERATOR', 'PRODUCER']; // Added PRODUCER
+
+
 const availableProductionUnitTypes = [
     { 
         id: 'workshop1', 
@@ -866,6 +999,45 @@ function displayPlayerActiveRecurringContracts() {
     logFunctionEnd('displayPlayerActiveRecurringContracts');
 }
 
+function displayNpcBuyOffers() {
+    logFunctionStart('displayNpcBuyOffers');
+    const offersSection = document.getElementById('npc-buy-offers-section');
+    if (!offersSection) { 
+        logFunctionEnd('displayNpcBuyOffers');
+        return; 
+    }
+
+    let html = '<h2>NPC Purchase Orders (Sell to NPC)</h2>';
+    let hasAnyOffer = false;
+    npcCompanies.forEach(company => {
+        const pendingOffers = company.buyOffersForPlayer.filter(offer => offer.status === 'pending');
+        if (pendingOffers.length > 0) {
+            if (!hasAnyOffer) {
+                html += '<ul>';
+                hasAnyOffer = true;
+            }
+            pendingOffers.forEach(offer => {
+                html += `
+                    <li>
+                        <strong>Buyer:</strong> ${offer.npcName} (ID: ${offer.npcId})<br>
+                        <strong>Wants:</strong> ${offer.quantity} of ${offer.productName}<br>
+                        <strong>Price/Unit:</strong> $${offer.pricePerUnit.toFixed(2)}<br>
+                        <strong>Deadline:</strong> Turn ${offer.deadlineTurns}<br>
+                        <button onclick="acceptNpcDeliveryContract('${offer.npcId}', '${offer.offerId}')" title="Accept to deliver ${offer.quantity} ${offer.productName} to ${offer.npcName}">Accept Delivery</button>
+                    </li>`;
+            });
+        }
+    });
+
+    if (!hasAnyOffer) {
+        html += "<p>No NPC purchase orders available this turn.</p>";
+    } else {
+        html += "</ul>";
+    }
+    offersSection.innerHTML = html;
+    logFunctionEnd('displayNpcBuyOffers');
+}
+
 
 function refreshAllDisplays() {
     logFunctionStart('refreshAllDisplays');
@@ -880,6 +1052,7 @@ function refreshAllDisplays() {
     displayRetailManagement(); 
     displayRecurringContractOffers(); 
     displayPlayerActiveRecurringContracts(); 
+    displayNpcBuyOffers(); // Added
     logFunctionEnd('refreshAllDisplays');
 }
 
@@ -940,6 +1113,57 @@ function cancelRecurringContract(contractId) {
     refreshAllDisplays();
     logFunctionEnd('cancelRecurringContract');
 }
+
+function acceptNpcDeliveryContract(npcId, offerId) {
+    logFunctionStart('acceptNpcDeliveryContract');
+    const company = npcCompanies.find(c => c.id === npcId);
+    if (!company) {
+        showNotification("NPC Company not found.", "error");
+        logFunctionEnd('acceptNpcDeliveryContract');
+        return;
+    }
+    const offerIndex = company.buyOffersForPlayer.findIndex(o => o.offerId === offerId && o.status === 'pending');
+    if (offerIndex === -1) {
+        showNotification("NPC buy offer not found or already accepted.", "error");
+        logFunctionEnd('acceptNpcDeliveryContract');
+        return;
+    }
+    const offer = company.buyOffersForPlayer[offerIndex];
+
+    // Create a new contract object for the player
+    const playerDeliveryContract = {
+        id: `playerDelivery-${Date.now().toString(36)}${Math.random().toString(36).substr(2,5)}`, // Unique ID for this delivery
+        offerId: offer.offerId, // Link back to the original offer
+        npcId: offer.npcId,
+        npcName: offer.npcName,
+        productName: offer.productName,
+        quantity: offer.quantity,
+        pricePerUnit: offer.pricePerUnit,
+        totalValue: offer.quantity * offer.pricePerUnit,
+        deadlineTurns: offer.deadlineTurns,
+        status: 'active_player_delivery' // Player needs to deliver
+    };
+    player.deliveryContractsToNPCs.push(playerDeliveryContract);
+
+    // Update NPC's record - mark the offer as accepted (or move to a different list)
+    // For simplicity, let's change status on original offer and add to NPC's accepted list
+    offer.status = 'player_accepted'; 
+    // It's also good for the NPC to have a reference to the player's specific contract ID if needed
+    company.acceptedContractsFromPlayer.push({
+        ...playerDeliveryContract, // Copy details
+        playerContractId: playerDeliveryContract.id, // Reference player's contract
+        originalOfferId: offer.offerId
+    });
+    
+    // Optional: Remove from buyOffersForPlayer if we don't want to see it anymore
+    // company.buyOffersForPlayer.splice(offerIndex, 1); 
+    // Or, just rely on status 'pending' for display
+
+    showNotification(`Contract accepted! Deliver ${offer.quantity} ${offer.productName} to ${offer.npcName} by turn ${offer.deadlineTurns}.`, "success");
+    refreshAllDisplays();
+    logFunctionEnd('acceptNpcDeliveryContract');
+}
+
 
 function openRetailStore() {
     logFunctionStart('openRetailStore');
@@ -1077,14 +1301,14 @@ function buyProductionUnit(unitTypeId) {
     player.money -= unitType.cost;
     player.lastTurnExpenses += unitType.cost; 
     productionUnitInstanceCounter++;
-    const primaryWarehouseId = player.getPrimaryWarehouse() ? player.getPrimaryWarehouse().id : 'wh0'; // Fallback, though should exist
+    const primaryWarehouseId = player.getPrimaryWarehouse() ? player.getPrimaryWarehouse().id : 'wh0'; 
     const newUnit = new ProductionUnit(
         unitType.id, 
         unitType.name, 
         unitType.cost, 
         unitType.recipe, 
         `unit-${productionUnitInstanceCounter}`,
-        primaryWarehouseId // Link to primary warehouse
+        primaryWarehouseId 
     );
     player.productionUnits.push(newUnit);
     showNotification(`Successfully purchased ${unitType.name}!`, 'success');
@@ -1094,17 +1318,14 @@ function buyProductionUnit(unitTypeId) {
 }
 
 function loadMaterialsForProductionUnit(unitInstanceId) {
-    // This function is now obsolete due to automation. Kept for potential future manual override.
     showNotification("Production units operate automatically. Manual loading disabled.", "info");
 }
 
 function startProductionOnUnit(unitInstanceId) {
-    // This function is now obsolete.
     showNotification("Production units operate automatically. Manual start disabled.", "info");
 }
 
 function collectOutputFromProductionUnit(unitInstanceId) {
-    // This function is now obsolete.
     showNotification("Production units operate automatically. Manual collection disabled.", "info");
 }
 
@@ -1273,6 +1494,31 @@ function initializeGame() {
             }
         }
     });
+
+    // Initialize NPC Companies
+    npcCompanies = [];
+    npcCompanyIdCounter = 0;
+    const numNpcCompanies = Math.floor(Math.random() * 2) + 2; // 2 or 3 companies
+    for (let i = 0; i < numNpcCompanies; i++) {
+        npcCompanyIdCounter++;
+        const companyId = `npc_comp_${npcCompanyIdCounter}`;
+        const companyName = NPC_COMPANY_NAMES[Math.floor(Math.random() * NPC_COMPANY_NAMES.length)] + ` ${npcCompanyIdCounter}`;
+        const companyStrategy = NPC_STRATEGIES[Math.floor(Math.random() * NPC_STRATEGIES.length)];
+        const companyMoney = Math.floor(Math.random() * 3001) + 7000; // 7000-10000
+        
+        const company = new NPCCompany(companyId, companyName, companyMoney, companyStrategy);
+        
+        const numInitialProducts = Math.floor(Math.random() * 3) + 1; 
+        for (let j=0; j<numInitialProducts; j++) {
+            const product = gameProducts[Math.floor(Math.random() * gameProducts.length)];
+            const quantity = Math.floor(Math.random() * 200) + 50; 
+            company.inventory[product.name] = (company.inventory[product.name] || 0) + quantity;
+        }
+        npcCompanies.push(company);
+    }
+    console.log("Initialized NPC Companies:", JSON.stringify(npcCompanies.map(c => ({id: c.id, name: c.name, money: c.money, strategy: c.strategy, invCount: Object.keys(c.inventory).length }))));
+
+
     setupEventListeners(); 
     refreshAllDisplays(); 
     logFunctionEnd('initializeGame');
@@ -1293,12 +1539,10 @@ function manageAutomatedProduction() {
 
         if (!targetWarehouse) {
             console.error(`Production unit ${unit.name} has no valid target warehouse.`);
-            return; // Skip this unit
+            return; 
         }
 
         if (unit.status === 'idle') {
-            // Check if output needs to be cleared (conceptual, as output is directly moved)
-            // Check if enough materials are in the targetWarehouse
             if (player.hasEnoughProduct(recipe.input.productName, recipe.input.quantity, targetWarehouse.id)) {
                 if (player.removeProductFromWarehouse(recipe.input.productName, recipe.input.quantity, targetWarehouse.id)) {
                     unit.status = 'producing';
@@ -1308,20 +1552,17 @@ function manageAutomatedProduction() {
                 } else {
                      console.log(`${unit.name} (ID: ${unit.instanceId}) could not remove materials from ${targetWarehouse.name} despite hasEnoughProduct check.`);
                 }
-            } else {
-                 // console.log(`${unit.name} (ID: ${unit.instanceId}) idle, not enough ${recipe.input.productName} in ${targetWarehouse.name}.`);
-            }
+            } 
         } else if (unit.status === 'producing') {
             unit.productionProgress--;
             if (unit.productionProgress <= 0) {
                 unit.status = 'completed';
-                // Output is conceptually ready in the unit
                 showNotification(`${unit.name} finished producing ${recipe.output.quantity} ${recipe.output.productName}. Output ready to transfer.`, 'success');
                 console.log(`${unit.name} (ID: ${unit.instanceId}) finished production. Output: ${recipe.output.quantity} ${recipe.output.productName}.`);
             }
         } else if (unit.status === 'completed') {
             if (player.addProductToWarehouse(outputProduct, recipe.output.quantity, targetWarehouse.id)) {
-                unit.status = 'idle'; // Ready for next cycle
+                unit.status = 'idle'; 
                 showNotification(`Transferred ${recipe.output.quantity} ${recipe.output.productName} from ${unit.name} to ${targetWarehouse.name}.`, 'success');
                 console.log(`${unit.name} (ID: ${unit.instanceId}) transferred output to ${targetWarehouse.name}. Now idle.`);
             } else {
@@ -1331,6 +1572,132 @@ function manageAutomatedProduction() {
         }
     });
     logFunctionEnd('manageAutomatedProduction');
+}
+
+function npcCompaniesBuyFromSuppliers() {
+    logFunctionStart('npcCompaniesBuyFromSuppliers');
+    if (!npcCompanies || npcCompanies.length === 0 || !gameSuppliers || gameSuppliers.length === 0) {
+        logFunctionEnd('npcCompaniesBuyFromSuppliers');
+        return;
+    }
+
+    npcCompanies.forEach(company => {
+        let productToBuyName = null;
+        let targetStock = 0;
+
+        if (company.strategy === 'RAW_MATERIAL_FOCUS') {
+            if ((company.inventory['Wood'] || 0) < 100) { 
+                productToBuyName = 'Wood';
+                targetStock = 100;
+            }
+        } else if (company.strategy === 'FINISHED_GOODS_FOCUS') {
+             if ((company.inventory['Wooden Chair'] || 0) < 50) { 
+                productToBuyName = 'Wooden Chair';
+                targetStock = 50;
+            }
+        } else if (company.strategy === 'GENERAL_TRADER' || company.strategy === 'BALANCED_OPERATOR') {
+            const randomIndex = Math.floor(Math.random() * gameProducts.length);
+            const randomProduct = gameProducts[randomIndex];
+            if ((company.inventory[randomProduct.name] || 0) < 50) {
+                productToBuyName = randomProduct.name;
+                targetStock = 50;
+            }
+        }
+        
+        if (productToBuyName) {
+            const productDefinition = gameProducts.find(p => p.name === productToBuyName);
+            if (!productDefinition) return; 
+
+            let bestSupplier = null;
+            let minPrice = Infinity;
+
+            gameSuppliers.forEach(supplier => {
+                const item = supplier.inventory.find(invItem => invItem.product.name === productToBuyName && invItem.quantity > 0);
+                if (item && item.price < minPrice) {
+                    minPrice = item.price;
+                    bestSupplier = supplier;
+                }
+            });
+
+            if (bestSupplier) {
+                const supplierItem = bestSupplier.inventory.find(invItem => invItem.product.name === productToBuyName);
+                const currentStock = company.inventory[productToBuyName] || 0;
+                let quantityToBuy = Math.floor(Math.random() * 51) + 20; 
+                quantityToBuy = Math.min(quantityToBuy, targetStock - currentStock); 
+                quantityToBuy = Math.min(quantityToBuy, supplierItem.quantity); 
+
+                const cost = quantityToBuy * supplierItem.price;
+
+                if (quantityToBuy > 0 && company.canAfford(cost)) {
+                    if (bestSupplier.sellToNPC(productToBuyName, quantityToBuy)) {
+                        company.money -= cost;
+                        company.updateInventory(productToBuyName, quantityToBuy);
+                        company.lastActivity = `Bought ${quantityToBuy} ${productToBuyName} from ${bestSupplier.name}.`;
+                        console.log(`${company.name} bought ${quantityToBuy} of ${productToBuyName} from ${bestSupplier.name} for $${cost.toFixed(2)}.`);
+                    }
+                }
+            }
+        }
+    });
+    logFunctionEnd('npcCompaniesBuyFromSuppliers');
+}
+
+function npcCompaniesSellToWholesalers() {
+    logFunctionStart('npcCompaniesSellToWholesalers');
+    if (!npcCompanies || npcCompanies.length === 0 || !gameWholesalers || gameWholesalers.length === 0) {
+        logFunctionEnd('npcCompaniesSellToWholesalers');
+        return;
+    }
+
+    npcCompanies.forEach(company => {
+        for (const productNameInInventory in company.inventory) {
+            if (!company.inventory.hasOwnProperty(productNameInInventory)) continue;
+
+            const productInStock = company.inventory[productNameInInventory];
+            if (productInStock <= 0) continue;
+
+            let shouldSell = false;
+            if (company.strategy === 'FINISHED_GOODS_FOCUS' && productNameInInventory === 'Wooden Chair') {
+                shouldSell = true;
+            } else if (company.strategy === 'RAW_MATERIAL_FOCUS' && productNameInInventory === 'Wood') {
+                if (productInStock > 150) shouldSell = true;
+            } else if (company.strategy === 'GENERAL_TRADER' || company.strategy === 'BALANCED_OPERATOR') {
+                shouldSell = true; 
+            }
+            
+            if (shouldSell) {
+                let bestWholesaler = null;
+                let maxPrice = 0;
+
+                gameWholesalers.forEach(wholesaler => {
+                    const demandItem = wholesaler.demand.find(d => d.product.name === productNameInInventory && d.quantity > 0);
+                    if (demandItem && demandItem.price > maxPrice) {
+                        maxPrice = demandItem.price;
+                        bestWholesaler = wholesaler;
+                    }
+                });
+
+                if (bestWholesaler) {
+                    const demandItem = bestWholesaler.demand.find(d => d.product.name === productNameInInventory);
+                    let quantityToSell = Math.floor(Math.random() * 21) + 10; 
+                    quantityToSell = Math.min(quantityToSell, productInStock);
+                    quantityToSell = Math.min(quantityToSell, demandItem.quantity);
+
+                    const revenue = quantityToSell * demandItem.price;
+
+                    if (quantityToSell > 0) {
+                        if (bestWholesaler.buyFromNPC(productNameInInventory, quantityToSell)) {
+                            company.money += revenue;
+                            company.updateInventory(productNameInInventory, -quantityToSell); 
+                            company.lastActivity = `Sold ${quantityToSell} ${productNameInInventory} to ${bestWholesaler.name}.`;
+                            console.log(`${company.name} sold ${quantityToSell} of ${productNameInInventory} to ${bestWholesaler.name} for $${revenue.toFixed(2)}.`);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    logFunctionEnd('npcCompaniesSellToWholesalers');
 }
 
 
@@ -1359,6 +1726,11 @@ function advanceTurn() {
         });
     });
     gameWholesalers.forEach(wholesaler => wholesaler.updateDemandPrices());
+    
+    npcCompanies.forEach(company => company.lastActivity = "Observing market fluctuations..."); // Reset activity
+    npcCompanies.forEach(company => company.generateBuyOfferForPlayer(gameProducts)); 
+    npcCompaniesBuyFromSuppliers(); 
+    npcCompaniesSellToWholesalers(); 
 
     player.acceptedContracts.forEach(contract => {
         if (contract.status === 'active' && currentTurn > contract.deadlineTurns) {
@@ -1368,7 +1740,7 @@ function advanceTurn() {
     });
     player.acceptedContracts = player.acceptedContracts.filter(c => c.status !== 'expired' && c.status !== 'fulfilled');
     
-    manageAutomatedProduction(); // Call the new function
+    manageAutomatedProduction(); 
 
     if (player.retailStore) {
         let totalRetailSalesThisTurn = 0;
@@ -1392,15 +1764,12 @@ function advanceTurn() {
                     player.retailStore.cashRegister += revenueFromSale; 
                     totalRetailSalesThisTurn += revenueFromSale;
                     salesSummary.push(`${actualSales} ${item.product.name} for $${revenueFromSale.toFixed(2)}`);
-                    // console.log(`Retail Sale: Sold ${actualSales} of ${item.product.name} at $${item.price} each. Store cash: $${player.retailStore.cashRegister.toFixed(2)}`);
                 }
             }
         });
         if (salesSummary.length > 0) {
             showNotification(`Your store sold: ${salesSummary.join(', ')}. Total: $${totalRetailSalesThisTurn.toFixed(2)}.`, 'success');
-        } else {
-            // console.log("No retail sales this turn.");
-        }
+        } 
     }
     
     if (player.recurringSupplyContracts) {
@@ -1436,7 +1805,7 @@ function advanceTurn() {
                 }
             }
         });
-         player.recurringSupplyContracts = player.recurringSupplyContracts.filter(rc => rc.status === 'active' || rc.status === 'paused'); // Keep active/paused, remove completed/cancelled
+         player.recurringSupplyContracts = player.recurringSupplyContracts.filter(rc => rc.status === 'active' || rc.status === 'paused'); 
     }
 
 
@@ -1457,6 +1826,135 @@ function advanceTurn() {
 // Call initializeGame when the script loads
 initializeGame();
 
-// --- Test Suite ---
-// runTestSuite(); // This will be called from the test execution environment if needed.
-// console.log('--- Script and Test Suite End ---'); // This will also be part of runTestSuite or test execution.
+function runTestSuite() {
+    console.log('\\n--- runTestSuite ---');
+    console.log('\\n--- AFTER STEP 1: Initial Game State ---');
+    if (!player) {
+        console.error("TEST SUITE ERROR: Player not initialized. initializeGame() might not have run or completed correctly.");
+        return;
+    }
+    console.log('Initial Player Money:', player.money);
+    console.log('Initial currentTurn state:', currentTurn); 
+    console.log('Number of Products:', gameProducts.length);
+    console.log('Number of Suppliers:', gameSuppliers.length);
+    console.log('Number of Wholesalers:', gameWholesalers.length);
+    console.log('Initial marketContracts:', marketContracts.length, JSON.stringify(marketContracts.map(c=>({p:c.productName, q:c.quantity, id:c.id.substring(0,5)}))));
+    console.log('NPC Companies Initialized:', JSON.stringify(npcCompanies.map(c => ({name: c.name, money: c.money, strategy: c.strategy, inventory: c.inventory}))));
+
+
+    console.log('\\n--- STEP 2: Advance Turns (1-3) ---');
+    for (let i = 1; i <= 3; i++) {
+        console.log(`\\nAdvancing to Turn (was ${currentTurn})...`);
+        advanceTurn(); 
+        console.log('Current Turn:', currentTurn);
+        console.log('Player Money after turn:', player.money.toFixed(2));
+        console.log('Player Last Turn Income:', player.lastTurnIncome.toFixed(2));
+        console.log('Player Last Turn Expenses:', player.lastTurnExpenses.toFixed(2));
+        npcCompanies.forEach(npc => {
+            console.log(`NPC ${npc.name} Money: ${npc.money.toFixed(2)}, Inventory: ${JSON.stringify(npc.inventory)}, LastActivity: ${npc.lastActivity}`);
+        });
+    }
+
+    console.log('\\n--- STEP 3: Player Buys Product ---');
+    if (gameSuppliers.length > 0 && gameSuppliers[0].inventory.length > 0) {
+        const supplierIndex = 0;
+        const productIndex = 0;
+        const quantityToBuy = 5;
+        if (gameSuppliers[supplierIndex].inventory[productIndex] && gameSuppliers[supplierIndex].inventory[productIndex].product) {
+            const productToBuy = gameSuppliers[supplierIndex].inventory[productIndex].product.name;
+            const supplierName = gameSuppliers[supplierIndex].name;
+            console.log('Player Money Before Buy:', player.money.toFixed(2));
+            console.log('Player Inventory Before Buy (Primary Warehouse):', JSON.stringify(player.getPrimaryWarehouse().inventory.map(item => ({ name: item.product.name, qty: item.quantity }))));
+            console.log(`Attempting to buy ${quantityToBuy} of ${productToBuy} from ${supplierName}`);
+            buyFromSupplier(supplierIndex, productIndex, quantityToBuy.toString());
+            console.log('Player Money After Buy:', player.money.toFixed(2));
+            console.log('Player Inventory After Buy (Primary Warehouse):', JSON.stringify(player.getPrimaryWarehouse().inventory.map(item => ({ name: item.product.name, qty: item.quantity }))));
+        } else {
+            console.log('Skipping buy product: Target product at supplier[0].inventory[0] is not defined.');
+        }
+    } else {
+        console.log('Skipping buy product: No suppliers or supplier inventory.');
+    }
+
+    console.log('\\n--- STEP 4: Player Accepts Contract ---');
+    const pendingContractsForTest = marketContracts.filter(c => c.status === 'pending');
+    if (pendingContractsForTest.length > 0) {
+        const pendingContractId = pendingContractsForTest[0].id;
+        const contractDetails = pendingContractsForTest[0];
+        console.log(`Market Contracts Before Accept (${marketContracts.length}):`, JSON.stringify(marketContracts.map(c=>({p:c.productName,s:c.status,id:c.id.substring(0,5)}))));
+        console.log(`Player Accepted Contracts Before (${player.acceptedContracts.length}):`, JSON.stringify(player.acceptedContracts.map(c=>({p:c.productName,s:c.status,id:c.id.substring(0,5)}))));
+        console.log(`Attempting to accept contract ID: ${pendingContractId} (Product: ${contractDetails.productName}, Qty: ${contractDetails.quantity})`);
+        acceptContract(pendingContractId);
+        console.log(`Market Contracts After Accept (${marketContracts.length}):`, JSON.stringify(marketContracts.map(c=>({p:c.productName,s:c.status,id:c.id.substring(0,5)}))));
+        console.log(`Player Accepted Contracts After (${player.acceptedContracts.length}):`, JSON.stringify(player.acceptedContracts.map(c=>({p:c.productName,s:c.status,id:c.id.substring(0,5)}))));
+    } else {
+        console.log('Skipping accept contract: No pending market contracts available.');
+    }
+
+    console.log('\\n--- STEP 5: Player Opens Retail Store ---');
+    console.log('Player Money Before Opening Store:', player.money.toFixed(2));
+    console.log('Player Retail Store Before:', player.retailStore);
+    openRetailStore();
+    console.log('Player Money After Opening Store:', player.money.toFixed(2));
+    console.log('Player Retail Store After:', player.retailStore ? { name: player.retailStore.name, cash: player.retailStore.cashRegister, stockCount: player.retailStore.stock.length } : null);
+
+    console.log('\\n--- STEP 6: Player Stocks Retail Store ---');
+    if (player.retailStore && gameProducts.length > 0) {
+        const productToStockDetails = gameProducts.find(p => p.name === 'Apples'); 
+        if (productToStockDetails) {
+          const productToStockName = productToStockDetails.name;
+          const quantityToStock = 3;
+          const currentQtyInWarehouse = player.getPrimaryWarehouse().getProductQuantity(productToStockName);
+          if (currentQtyInWarehouse < quantityToStock) {
+             console.log(`Manually adding ${quantityToStock - currentQtyInWarehouse} of ${productToStockName} to player warehouse for testing stock function.`);
+             player.addProductToWarehouse(productToStockDetails, quantityToStock - currentQtyInWarehouse);
+          }
+          console.log('Player Warehouse Before Stocking Store:', JSON.stringify(player.getPrimaryWarehouse().inventory.map(item => ({ name: item.product.name, qty: item.quantity }))));
+          const storeItemBefore = player.retailStore.stock.find(item => item.product.name === productToStockName);
+          console.log('Retail Store Stock Before (${productToStockName}):', storeItemBefore ? storeItemBefore.quantity : 'N/A');
+          console.log(`Attempting to stock ${quantityToStock} of ${productToStockName}`);
+          addStockToRetail(productToStockName, quantityToStock.toString());
+          console.log('Player Warehouse After Stocking Store:', JSON.stringify(player.getPrimaryWarehouse().inventory.map(item => ({ name: item.product.name, qty: item.quantity }))));
+          const storeItemAfter = player.retailStore.stock.find(item => item.product.name === productToStockName);
+          console.log('Retail Store Stock After (${productToStockName}):', storeItemAfter ? storeItemAfter.quantity : 'N/A');
+          
+          console.log(`Setting ${productToStockName} for sale in retail store.`);
+          toggleForSale(productToStockName);
+          const appleStoreItem = player.retailStore.stock.find(item => item.product.name === productToStockName);
+          console.log(`Apples forSale status: ${appleStoreItem ? appleStoreItem.forSale : 'Not found'}`);
+
+        } else { console.log("Product 'Apples' not found for stocking test."); }
+    } else {
+        console.log('Skipping stock retail store: No retail store or no game products.');
+    }
+
+    console.log('\\n--- STEP 7: Advance Turns (4-6) ---');
+    for (let i = 1; i <= 3; i++) {
+        console.log(`\\nAdvancing to Turn (was ${currentTurn})...`);
+        advanceTurn();
+        console.log('Current Turn:', currentTurn);
+        console.log('Player Money after turn:', player.money.toFixed(2));
+        console.log('Player Last Turn Income:', player.lastTurnIncome.toFixed(2));
+        console.log('Player Last Turn Expenses:', player.lastTurnExpenses.toFixed(2));
+        if(player.retailStore) {
+            console.log('Retail Store Cash Register:', player.retailStore.cashRegister.toFixed(2));
+            player.retailStore.stock.forEach(item => {
+                if (item.forSale && item.quantity > 0) console.log(`Store stock for sale: ${item.product.name}, Qty: ${item.quantity}, Price: ${item.price}`);
+            });
+        }
+        if(player.productionUnits.length > 0) {
+          player.productionUnits.forEach(unit => {
+            console.log(`Production Unit ${unit.name} (ID: ${unit.instanceId}): Status: ${unit.status}, Progress: ${unit.productionProgress}, Output Qty: ${unit.outputInventory.quantity}`);
+          });
+        }
+         npcCompanies.forEach(npc => {
+            console.log(`NPC ${npc.name} Money: ${npc.money.toFixed(2)}, Inventory: ${JSON.stringify(npc.inventory)}, LastActivity: ${npc.lastActivity}`);
+        });
+    }
+    console.log('\\n--- Test Sequence Complete ---');
+}
+
+runTestSuite(); 
+console.log('--- Script and Test Suite End ---');
+
+[end of script.js]
