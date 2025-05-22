@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Simulation Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Business Simulation Game</h1>
+    </header>
+
+    <main>
+        <section id="game-instructions">
+            <h3>Welcome to Business Sim!</h3>
+            <p><strong>Goal:</strong> Your objective is to make a profit by strategically buying products from suppliers, selling them to wholesalers, or fulfilling contracts.</p>
+            <p><strong>How to Play:</strong>
+                <ul>
+                    <li>Review available products from <strong>Suppliers</strong> and buy what you think you can sell or use for contracts.</li>
+                    <li>Check what <strong>Wholesalers</strong> are demanding and sell your products to them.</li>
+                    <li>Look at <strong>Market Contracts</strong>. If you can fulfill one by its deadline, accept it for a potentially higher profit.</li>
+                    <li>Manage your inventory and money carefully.</li>
+                    <li>Click "Advance Turn" to move to the next day, which will update markets, prices, and contract deadlines.</li>
+                </ul>
+            </p>
+            <p><small><strong>Note:</strong> If you encounter issues or the game doesn't display correctly, check the browser's Developer Console (usually F12) for detailed logs and error messages.</small></p>
+        </section>
+
+        <section id="game-interface">
+            <h2>Game Interface</h2>
+            <div id="player-info">
+                <!-- Player's money and inventory will be displayed here -->
+            </div>
+            <div id="notifications-area" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; min-height: 50px;">
+                <!-- Notifications will appear here -->
+            </div>
+            <button id="advance-turn-btn" onclick="advanceTurn()">Advance Turn</button>
+            <!-- Placeholder for game controls and displays -->
+        </section>
+
+        <section id="suppliers-info">
+            <h2>Suppliers</h2>
+            <!-- Placeholder for supplier information -->
+        </section>
+
+        <section id="wholesalers-info">
+            <h2>Wholesalers</h2>
+            <!-- Placeholder for wholesaler information -->
+        </section>
+
+        <section id="contracts-info">
+            <h2>Contracts</h2>
+            <!-- Placeholder for contract information -->
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Business Simulation Game</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

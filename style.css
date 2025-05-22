@@ -1,0 +1,150 @@
+/* General Styles */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+header {
+    background-color: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+}
+
+main {
+    padding: 1rem;
+    display: grid;
+    grid-template-areas:
+        "game-instructions game-instructions"
+        "game-interface game-interface"
+        "suppliers-info wholesalers-info"
+        "contracts-info contracts-info";
+    grid-gap: 1rem;
+}
+
+/* Section Styling */
+#game-instructions {
+    grid-area: game-instructions;
+    background-color: #f0f8ff; /* AliceBlue for a light, distinct background */
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-bottom: 1rem; /* Add some space below it */
+}
+
+#game-instructions h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+#game-instructions ul {
+    list-style-position: inside;
+    padding-left: 0;
+}
+
+#game-instructions p {
+    margin-bottom: 0.5rem;
+}
+
+#game-interface {
+    grid-area: game-interface;
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#suppliers-info {
+    grid-area: suppliers-info;
+    background-color: #e9e9e9;
+    padding: 1rem;
+    border-radius: 5px;
+}
+
+#wholesalers-info {
+    grid-area: wholesalers-info;
+    background-color: #e9e9e9;
+    padding: 1rem;
+    border-radius: 5px;
+}
+
+#contracts-info {
+    grid-area: contracts-info;
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-top: 1rem;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Headings in sections */
+section h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+footer {
+    text-align: center;
+    padding: 1rem 0;
+    background-color: #333;
+    color: #fff;
+    position: relative; /* Changed from fixed to relative to avoid overlap in typical layouts */
+    bottom: 0;
+    width: 100%;
+}
+
+/* Notifications Area Styling */
+#notifications-area {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    min-height: 50px;
+    background-color: #f9f9f9;
+}
+
+.notification {
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.notification.success {
+    background-color: #d4edda;
+    color: #155724;
+    border-color: #c3e6cb;
+}
+
+.notification.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+
+.notification.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-color: #bee5eb;
+}
+
+/* Responsive adjustments (optional for now, but good practice) */
+@media (max-width: 768px) {
+    main {
+        grid-template-areas:
+            "game-instructions"
+            "game-interface"
+            "suppliers-info"
+            "wholesalers-info"
+            "contracts-info";
+    }
+}
