@@ -53,6 +53,44 @@
             <h2>Contracts</h2>
             <!-- Placeholder for contract information -->
         </section>
+
+        <section id="market-opportunities">
+            <h2>Market Opportunities</h2>
+            <!-- Profitable direct trades will be listed here -->
+        </section>
+
+        <section id="player-active-contracts-section">
+            <h2>My Active Contracts</h2>
+            <div id="active-contracts-sort-controls">
+                <label for="sort-key-contracts">Sort by:</label>
+                <select id="sort-key-contracts">
+                    <option value="deadlineTurns">Deadline</option>
+                    <option value="totalValue">Total Value</option>
+                    <option value="productName">Product Name</option>
+                </select>
+                <label for="sort-order-contracts">Order:</label>
+                <select id="sort-order-contracts">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+                <button id="apply-sort-contracts-btn">Apply Sort</button>
+            </div>
+            <div id="active-contracts-list">
+                <!-- Detailed active contracts will be listed here -->
+            </div>
+        </section>
+
+        <section id="buy-production-units-section">
+            <!-- Available production units will be listed here by displayAvailableProductionUnits() -->
+        </section>
+
+        <section id="player-owned-units-section">
+            <!-- Player's owned production units will be listed here by displayPlayerOwnedUnits() -->
+        </section>
+
+        <section id="retail-management-section">
+            <!-- Retail store management UI will go here -->
+        </section>
     </main>
 
     <footer>

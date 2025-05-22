@@ -26,7 +26,10 @@ main {
         "game-instructions game-instructions"
         "game-interface game-interface"
         "suppliers-info wholesalers-info"
-        "contracts-info contracts-info";
+        "contracts-info player-active-contracts-section" 
+        "market-opportunities market-opportunities"
+        "buy-production-units-section player-owned-units-section"
+        "retail-management-section retail-management-section"; /* Added new section */
     grid-gap: 1rem;
 }
 
@@ -137,6 +140,256 @@ footer {
     border-color: #bee5eb;
 }
 
+/* Price History Display */
+.history-toggle {
+    cursor: pointer;
+    color: blue;
+    text-decoration: underline;
+    font-size: 0.8em;
+    margin-left: 5px;
+}
+
+.price-history-display {
+    margin-top: 5px;
+    padding: 5px;
+    background-color: #f9f9f9;
+    border: 1px dashed #ccc;
+    border-radius: 3px;
+}
+
+.price-history-display ul {
+    list-style-type: none;
+    padding-left: 5px;
+    margin: 0;
+}
+
+.price-history-display li {
+    font-size: 0.95em;
+}
+
+/* Market Opportunities Styling */
+#market-opportunities {
+    grid-area: market-opportunities;
+    background-color: #fff8e1; /* Light yellow background */
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-top: 1rem;
+}
+
+#market-opportunities h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+#market-opportunities ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#market-opportunities li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+#market-opportunities li:last-child {
+    border-bottom: none;
+}
+
+/* Player Active Contracts Section Styling */
+#player-active-contracts-section {
+    grid-area: player-active-contracts-section;
+    background-color: #e6e6fa; /* Lavender for a distinct background */
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-top: 1rem;
+}
+
+#player-active-contracts-section h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+#active-contracts-sort-controls {
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}
+
+#active-contracts-sort-controls label {
+    margin-right: 5px;
+}
+#active-contracts-sort-controls select,
+#active-contracts-sort-controls button {
+    margin-right: 10px;
+    padding: 5px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+}
+
+#active-contracts-list ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#active-contracts-list li {
+    background-color: #fff;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    flex-direction: column; /* Stack details vertically */
+}
+
+#active-contracts-list li strong { /* Make labels for contract details stand out */
+    color: #555;
+}
+
+#active-contracts-list button {
+    padding: 5px 10px;
+    margin-top: 10px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#active-contracts-list button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.contract-deadline-warning {
+    background-color: #fff3cd; /* Light yellow, less aggressive than orange/red */
+    border-left: 5px solid #ffc107; /* Amber border */
+}
+
+.contract-expired {
+    background-color: #f8d7da; /* Light red for expired contracts */
+    opacity: 0.7;
+}
+
+/* Production Units Styling */
+#buy-production-units-section,
+#player-owned-units-section {
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-top: 1rem;
+}
+
+#buy-production-units-section {
+    grid-area: buy-production-units-section;
+    background-color: #e0f7fa; /* Light cyan */
+}
+
+#player-owned-units-section {
+    grid-area: player-owned-units-section;
+    background-color: #ffe0b2; /* Light orange */
+}
+
+#buy-production-units-section h2,
+#player-owned-units-section h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+#buy-production-units-section ul,
+#player-owned-units-section ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#buy-production-units-section li,
+#player-owned-units-section li {
+    background-color: #fff;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+#buy-production-units-section button,
+#player-owned-units-section button {
+    padding: 5px 10px;
+    margin-top: 5px;
+    margin-right: 5px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#buy-production-units-section button:disabled,
+#player-owned-units-section button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Retail Management Section Styling */
+#retail-management-section {
+    grid-area: retail-management-section;
+    background-color: #f5f5f5; /* Light grey, distinct */
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    margin-top: 1rem;
+}
+
+#retail-management-section h2 {
+    color: #333;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+#retail-management-section button {
+    padding: 8px 15px;
+    margin-top: 10px;
+    background-color: #5cb85c; /* Green for positive action */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#retail-management-section button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+/* Financial Summary Styling (within player-info) */
+#financial-summary {
+    padding: 8px;
+    margin-top: 10px;
+    border-top: 1px solid #eee;
+    background-color: #f9f9f9;
+    border-radius: 0 0 5px 5px; /* Match parent if player-info has rounded bottom */
+}
+
+#financial-summary h4 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-size: 1em;
+    color: #333;
+}
+
+#financial-summary p {
+    margin: 3px 0;
+    font-size: 0.9em;
+}
+
+
 /* Responsive adjustments (optional for now, but good practice) */
 @media (max-width: 768px) {
     main {
@@ -145,6 +398,11 @@ footer {
             "game-interface"
             "suppliers-info"
             "wholesalers-info"
-            "contracts-info";
+            "contracts-info"
+            "player-active-contracts-section" 
+            "market-opportunities"
+            "buy-production-units-section" 
+            "player-owned-units-section"
+            "retail-management-section"; /* Added */
     }
 }
